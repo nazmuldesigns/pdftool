@@ -26,22 +26,43 @@ import {
   Bookmark,
   Copy,
   Check,
-  QrCode
+  QrCode,
+  Edit3,
+  Sparkles,
+  ArrowRight,
+  Archive
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
+const CHAINABLE_TOOLS = [
+  { id: 'add-watermark', name: 'Add Watermark', icon: 'Stamp' },
+  { id: 'compress-pdf', name: 'Compress', icon: 'Minimize2' },
+  { id: 'sign-pdf', name: 'Sign PDF', icon: 'PenTool' },
+  { id: 'page-numbers', name: 'Page Numbers', icon: 'Hash' },
+  { id: 'rotate-pdf', name: 'Rotate', icon: 'RotateCw' },
+  { id: 'split-pdf', name: 'Split', icon: 'Scissors' },
+  { id: 'protect-pdf', name: 'Protect', icon: 'Lock' },
+  { id: 'pdf-to-images', name: 'PDF to Images', icon: 'Image' },
+  { id: 'pdf-to-text', name: 'Extract Text', icon: 'FileText' },
+  { id: 'change-page-size', name: 'Resize', icon: 'Maximize' }
+];
+
 interface ToolWorkspaceProps {
   tool: ToolDefinition;
+  initialFile?: File | null;
   onBack: () => void;
   onSaveDocument?: (doc: { filename: string; size: number; toolId: string; blob: Blob }) => void;
   onRecordHistory?: (job: { toolId: string; filename: string; size: number; status: string }) => void;
+  onNavigateToTool?: (toolId: string, file: File) => void;
 }
 
 export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   tool,
+  initialFile,
   onBack,
   onSaveDocument,
-  onRecordHistory
+  onRecordHistory,
+  onNavigateToTool
 }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [previewFiles, setPreviewFiles] = useState<PreviewFileItem[]>([]);
@@ -60,6 +81,13 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [result, setResult] = useState<ToolExecutionResponse | null>(null);
   const [savedToCloud, setSavedToCloud] = useState(false);
+  const [customFilename, setCustomFilename] = useState<string>('');
+
+  useEffect(() => {
+    if (result?.outputFilename) {
+      setCustomFilename(result.outputFilename);
+    }
+  }, [result]);
 
   // Specialized Tool State
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
@@ -157,6 +185,13 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
       setFiles([single[0].file]);
     }
   };
+
+  // Pre-load initial document from chaining if provided
+  useEffect(() => {
+    if (initialFile) {
+      addFiles([initialFile]);
+    }
+  }, [initialFile]);
 
   const handleReorderFiles = (reordered: PreviewFileItem[]) => {
     setPreviewFiles(reordered);
@@ -534,13 +569,19 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   const handleDownload = () => {
     if (!result?.outputData) return;
 
+    let filename = customFilename.trim() || result.outputFilename || 'processed-document.pdf';
+    const expectedExt = (result.outputFilename || '').split('.').pop();
+    if (expectedExt && !filename.toLowerCase().endsWith(`.${expectedExt.toLowerCase()}`)) {
+      filename = `${filename}.${expectedExt}`;
+    }
+
     const blob = new Blob([result.outputData as any], {
       type: result.outputMimeType || 'application/pdf'
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = result.outputFilename || 'processed-document.pdf';
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -567,16 +608,37 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
 
   const handleSaveToAccount = () => {
     if (!result?.outputData) return;
+    let filename = customFilename.trim() || result.outputFilename || 'document.pdf';
+    const expectedExt = (result.outputFilename || '').split('.').pop();
+    if (expectedExt && !filename.toLowerCase().endsWith(`.${expectedExt.toLowerCase()}`)) {
+      filename = `${filename}.${expectedExt}`;
+    }
     const blob = new Blob([result.outputData as any], {
       type: result.outputMimeType || 'application/pdf'
     });
     onSaveDocument?.({
-      filename: result.outputFilename || 'document.pdf',
+      filename,
       size: result.outputData.byteLength,
       toolId: tool.id,
       blob
     });
     setSavedToCloud(true);
+  };
+
+  const handleSendToTool = (targetToolId: string) => {
+    if (!result?.outputData || !onNavigateToTool) return;
+    let filename = customFilename.trim() || result.outputFilename || 'document.pdf';
+    if (!filename.toLowerCase().endsWith('.pdf')) {
+      filename += '.pdf';
+    }
+    const blob = new Blob([result.outputData as any], {
+      type: 'application/pdf'
+    });
+    const nextFile = new File([blob], filename, {
+      type: 'application/pdf',
+      lastModified: Date.now()
+    });
+    onNavigateToTool(targetToolId, nextFile);
   };
 
   const formatSize = (bytes: number) => {
@@ -605,7 +667,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
       </div>
 
       <div className="workspace-header">
-        <div style={{ display: 'inline-flex', marginBottom: '0.75rem' }} className="tool-icon-wrapper">
+        <div style={{ display: 'inline-flex', marginBottom: '0.75rem' }} className={`tool-icon-wrapper tool-icon-cat-${tool.category}`}>
           <IconRenderer name={tool.icon} size={28} />
         </div>
         <h1 className="workspace-title">{tool.name}</h1>
@@ -1019,8 +1081,27 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
               {/* Rendered PDF Images Grid for PDF to Images */}
               {renderedPdfImages.length > 0 && (
                 <div style={{ margin: '1.5rem 0', textAlign: 'left' }}>
-                  <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>
-                    Rendered Page Images ({renderedPdfImages.length} Pages):
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    gap: '0.75rem',
+                    marginBottom: '0.875rem'
+                  }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--text-primary)' }}>
+                      Rendered Pages ({renderedPdfImages.length} {renderedPdfImages.length === 1 ? 'Image' : 'Images'} Extracted):
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      style={{ height: '34px', padding: '0 1rem', fontSize: '0.8125rem' }}
+                      onClick={handleDownload}
+                      title="Download all extracted page images together in a ZIP file"
+                    >
+                      <Archive size={15} />
+                      <span>Download All Images (.ZIP)</span>
+                    </button>
                   </div>
                   <div style={{
                     display: 'grid',
@@ -1073,15 +1154,35 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 </div>
               )}
 
+              {/* Rename File Before Download */}
+              <div className="download-filename-box">
+                <label htmlFor="rename-input" className="filename-label">
+                  <Edit3 size={15} />
+                  <span>Save As:</span>
+                </label>
+                <input
+                  id="rename-input"
+                  type="text"
+                  className="filename-input"
+                  value={customFilename}
+                  onChange={(e) => setCustomFilename(e.target.value)}
+                  placeholder="Enter file name..."
+                />
+              </div>
+
               {/* Actions: Download, Save to Cloud, Process Another */}
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem', justifyContent: 'center' }}>
                 <button
                   className="btn-primary"
                   onClick={handleDownload}
-                  style={{ height: '46px', padding: '0 1.5rem' }}
+                  style={{ height: '46px', padding: '0 1.5rem', fontWeight: 700 }}
                 >
-                  <Download size={18} />
-                  <span>Download {result.outputFilename || 'Output'}</span>
+                  {tool.id === 'pdf-to-images' ? <Archive size={18} /> : <Download size={18} />}
+                  <span>
+                    {tool.id === 'pdf-to-images'
+                      ? `Download All Images (${renderedPdfImages.length} Pages as .ZIP)`
+                      : `Download ${customFilename || result.outputFilename || 'Document'}`}
+                  </span>
                 </button>
 
                 <button
@@ -1103,6 +1204,31 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                   <span>Process Another</span>
                 </button>
               </div>
+
+              {/* Quick Pipeline: Continue into Another Tool Directly */}
+              {(result.outputMimeType === 'application/pdf' || result.outputFilename?.toLowerCase().endsWith('.pdf')) && onNavigateToTool && (
+                <div className="next-tool-pipeline">
+                  <div className="next-tool-heading">
+                    <Sparkles size={16} style={{ color: 'var(--accent-primary)' }} />
+                    <span>Continue with this PDF in another tool:</span>
+                  </div>
+                  <div className="next-tool-actions">
+                    {CHAINABLE_TOOLS.filter(t => t.id !== tool.id).map(t => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className="btn-next-tool"
+                        onClick={() => handleSendToTool(t.id)}
+                        title={`Take this document directly to ${t.name} without downloading`}
+                      >
+                        <IconRenderer name={t.icon} size={14} />
+                        <span>{t.name}</span>
+                        <ArrowRight size={12} style={{ opacity: 0.6 }} />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </>

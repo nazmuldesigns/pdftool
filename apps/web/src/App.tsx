@@ -126,14 +126,28 @@ export const App: React.FC = () => {
     } catch {}
   };
 
+  const [preloadedFile, setPreloadedFile] = useState<File | null>(null);
+
   const handleSelectTool = (tool: ToolDefinition) => {
+    setPreloadedFile(null);
     setSelectedTool(tool);
     setCurrentView('workspace');
     window.location.hash = `#tool/${tool.id}`;
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleNavigateToToolWithFile = (toolId: string, file: File) => {
+    const target = TOOLS_REGISTRY.find(t => t.id === toolId);
+    if (!target) return;
+    setPreloadedFile(file);
+    setSelectedTool(target);
+    setCurrentView('workspace');
+    window.location.hash = `#tool/${toolId}`;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const handleBackToTools = () => {
+    setPreloadedFile(null);
     setSelectedTool(null);
     setCurrentView('home');
     window.location.hash = '#home';
@@ -187,10 +201,13 @@ export const App: React.FC = () => {
         {currentView === 'workspace' && selectedTool ? (
           <div className="container">
             <ToolWorkspace
+              key={selectedTool.id}
               tool={selectedTool}
+              initialFile={preloadedFile}
               onBack={handleBackToTools}
               onRecordHistory={handleRecordHistory}
               onSaveDocument={handleSaveDocument}
+              onNavigateToTool={handleNavigateToToolWithFile}
             />
           </div>
         ) : (

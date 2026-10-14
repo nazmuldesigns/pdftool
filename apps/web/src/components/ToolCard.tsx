@@ -26,7 +26,7 @@ export const ToolCard: React.FC<ToolCardProps> = ({ tool, onSelect }) => {
       id={`tool-card-${tool.id}`}
     >
       <div className="tool-card-header">
-        <div className="tool-icon-wrapper">
+        <div className={`tool-icon-wrapper tool-icon-cat-${tool.category}`}>
           <IconRenderer name={tool.icon} size={22} />
         </div>
         <span className={`tool-badge ${badgeClass}`}>

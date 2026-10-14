@@ -1,6 +1,6 @@
 import React from 'react';
 import { APP_CONFIG } from '@pdf-toolbox/shared';
-import { Layers, ShieldCheck, Mail, User, Code2 } from 'lucide-react';
+import { Layers, ShieldCheck, Mail, User } from 'lucide-react';
 
 interface FooterProps {
   onNavigateCategory: (cat: string) => void;
@@ -81,11 +81,11 @@ export const Footer: React.FC<FooterProps> = ({
           display: 'flex',
           flexWrap: 'wrap',
           alignItems: 'center',
-          justifyContent: 'space-between',
+          justifyContent: 'center',
           gap: '1rem',
           fontSize: '0.875rem'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
             <span style={{ color: 'var(--text-muted)' }}>Lead Developer:</span>
             <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
               <User size={15} style={{ color: 'var(--accent-primary)' }} />
@@ -106,25 +106,6 @@ export const Footer: React.FC<FooterProps> = ({
             >
               <Mail size={15} />
               {APP_CONFIG.contactEmail}
-            </a>
-          </div>
-
-          <div>
-            <a
-              href="https://github.com/nazmuldesigns/pdftool"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                color: 'var(--text-secondary)',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.375rem',
-                textDecoration: 'none',
-                fontWeight: 600
-              }}
-            >
-              <Code2 size={16} />
-              <span>github.com/nazmuldesigns/pdftool</span>
             </a>
           </div>
         </div>

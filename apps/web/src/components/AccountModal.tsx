@@ -207,9 +207,6 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                 <div>
                   Contact: <a href="mailto:nazmuldesigns0@gmail.com" style={{ color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600 }}>nazmuldesigns0@gmail.com</a>
                 </div>
-                <div>
-                  Repository: <a href="https://github.com/nazmuldesigns/pdftool" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>github.com/nazmuldesigns/pdftool</a>
-                </div>
               </div>
             </div>
           )}
