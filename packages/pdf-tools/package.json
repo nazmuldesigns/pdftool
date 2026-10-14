@@ -1,0 +1,19 @@
+{
+  "name": "@pdf-toolbox/pdf-tools",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@pdf-toolbox/shared": "*",
+    "pdf-lib": "^1.17.1",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

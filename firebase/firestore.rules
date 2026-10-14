@@ -1,0 +1,41 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    // User root profile & preferences
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+      
+      // User processing jobs history
+      match /jobs/{jobId} {
+        allow read, write: if isOwner(userId);
+      }
+      
+      // User saved documents metadata
+      match /documents/{documentId} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+    
+    // Public non-sensitive status & tool availability check (read-only)
+    match /system/status {
+      allow read: if true;
+      allow write: if false;
+    }
+    
+    // Deny all other collections by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "name": "@pdf-toolbox/pdf-api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "node --watch src/index.ts"
+  },
+  "dependencies": {
+    "@pdf-toolbox/shared": "*",
+    "@pdf-toolbox/pdf-tools": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^5.8.2"
+  }
+}

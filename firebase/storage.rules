@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isValidPdfOrDocument() {
+      return request.resource.size < 100 * 1024 * 1024 // 100 MB max
+        && (
+          request.resource.contentType.matches('application/pdf') ||
+          request.resource.contentType.matches('image/.*') ||
+          request.resource.contentType.matches('text/.*') ||
+          request.resource.contentType.matches('application/zip') ||
+          request.resource.contentType.matches('application/vnd.openxmlformats-officedocument.*')
+        );
+    }
+
+    // Authenticated user private storage
+    match /users/{userId}/{allPaths=**} {
+      allow read, delete: if isOwner(userId);
+      allow write: if isOwner(userId) && isValidPdfOrDocument();
+    }
+
+    // Temporary anonymous staging uploads (managed with short-lived TTL)
+    match /temp/anonymous/{uploadId}/{fileName} {
+      // Allow creation only with size and mime constraints
+      allow create: if isValidPdfOrDocument();
+      // Only readable by background processing worker via Admin SDK / service account
+      allow read: if false;
+      allow update, delete: if false;
+    }
+
+    // Deny all other access
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

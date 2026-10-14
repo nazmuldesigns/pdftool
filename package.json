@@ -1,0 +1,29 @@
+{
+  "name": "pdf-toolbox-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "All-in-One PDF & Document Utility Web Application - PDF Toolbox",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/web",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "keywords": [
+    "pdf",
+    "pdf-tools",
+    "pdf-toolbox",
+    "document-converter",
+    "merge-pdf",
+    "split-pdf",
+    "compress-pdf"
+  ],
+  "author": "PDF Toolbox Team",
+  "license": "Apache-2.0"
+}
