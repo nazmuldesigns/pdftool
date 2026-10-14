@@ -1,19 +1,32 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import type { ToolDefinition } from '@pdf-toolbox/shared';
 import { executeTool } from '@pdf-toolbox/pdf-tools';
 import type { ToolExecutionResponse, FileInputPayload } from '@pdf-toolbox/pdf-tools';
 import { IconRenderer } from './IconRenderer';
+import { FilePreviewGrid } from './FilePreviewGrid';
+import type { PreviewFileItem } from './FilePreviewGrid';
+import { SignaturePad } from './SignaturePad';
+import {
+  getPdfFirstPageThumbnail,
+  convertPdfToImages,
+  extractTextFromPdf,
+  generateQrCodeDataUrl
+} from '../utils/pdfHelper';
+import type { PdfPageImage } from '../utils/pdfHelper';
+import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import JSZip from 'jszip';
 import {
   UploadCloud,
-  FileText,
-  Trash2,
   Download,
   RotateCcw,
   CheckCircle2,
   AlertCircle,
   Clock,
   ArrowLeft,
-  Bookmark
+  Bookmark,
+  Copy,
+  Check,
+  QrCode
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -31,6 +44,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   onRecordHistory
 }) => {
   const [files, setFiles] = useState<File[]>([]);
+  const [previewFiles, setPreviewFiles] = useState<PreviewFileItem[]>([]);
   const [options, setOptions] = useState<Record<string, any>>(() => {
     const initial: Record<string, any> = {};
     tool.options.forEach(opt => {
@@ -47,9 +61,26 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   const [result, setResult] = useState<ToolExecutionResponse | null>(null);
   const [savedToCloud, setSavedToCloud] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // Specialized Tool State
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [extractedText, setExtractedText] = useState<string>('');
+  const [copiedText, setCopiedText] = useState(false);
+  const [renderedPdfImages, setRenderedPdfImages] = useState<PdfPageImage[]>([]);
+  const [liveQrCodeUrl, setLiveQrCodeUrl] = useState<string>('');
+  const [composedText, setComposedText] = useState<string>(
+    '# Document Title\n\nType your content here or paste text to convert directly to a clean PDF document.\n\n- Point 1\n- Point 2\n- Point 3'
+  );
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const isPending = tool.status.startsWith('pending-');
+
+  // Live QR Code Generation
+  useEffect(() => {
+    if (tool.id === 'qr-code-to-pdf') {
+      const content = options.qrContent || 'https://';
+      generateQrCodeDataUrl(content).then(url => setLiveQrCodeUrl(url)).catch(() => {});
+    }
+  }, [tool.id, options.qrContent]);
 
   // Handle Drag & Drop
   const handleDragOver = (e: React.DragEvent) => {
@@ -90,24 +121,76 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
       validFiles.push(f);
     }
 
+    const newPreviewItems: PreviewFileItem[] = validFiles.map(f => {
+      const isImg = f.type.startsWith('image/') || /\.(jpe?g|png|webp|gif|bmp|svg)$/i.test(f.name);
+      const isPdfFile = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
+      return {
+        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        file: f,
+        rotation: 0,
+        isPdf: isPdfFile,
+        isImage: isImg,
+        thumbnailUrl: isImg ? URL.createObjectURL(f) : undefined
+      };
+    });
+
+    // Asynchronously render PDF first page thumbnails
+    newPreviewItems.forEach(item => {
+      if (item.isPdf) {
+        item.file.arrayBuffer().then(buf => {
+          getPdfFirstPageThumbnail(new Uint8Array(buf), 0.4).then(thumb => {
+            if (thumb) {
+              setPreviewFiles(prev => prev.map(p => p.id === item.id ? { ...p, thumbnailUrl: thumb } : p));
+            }
+          });
+        });
+      }
+    });
+
     if (tool.allowMultiple) {
-      setFiles(prev => [...prev, ...validFiles].slice(0, tool.maxFiles));
+      const combined = [...previewFiles, ...newPreviewItems].slice(0, tool.maxFiles || 200);
+      setPreviewFiles(combined);
+      setFiles(combined.map(p => p.file));
     } else {
-      setFiles([validFiles[0]]);
+      const single = [newPreviewItems[0]];
+      setPreviewFiles(single);
+      setFiles([single[0].file]);
     }
   };
 
-  const removeFile = (index: number) => {
-    setFiles(prev => prev.filter((_, i) => i !== index));
-    if (files.length <= 1) {
+  const handleReorderFiles = (reordered: PreviewFileItem[]) => {
+    setPreviewFiles(reordered);
+    setFiles(reordered.map(p => p.file));
+  };
+
+  const handleRemoveFile = (id: string) => {
+    const updated = previewFiles.filter(p => p.id !== id);
+    setPreviewFiles(updated);
+    setFiles(updated.map(p => p.file));
+    if (updated.length === 0) {
       setResult(null);
     }
   };
 
+  const handleRotateFile = (id: string) => {
+    setPreviewFiles(prev => prev.map(p => (
+      p.id === id ? { ...p, rotation: (p.rotation + 90) % 360 } : p
+    )));
+  };
+
   const clearAllFiles = () => {
+    // Revoke object URLs to avoid memory leaks
+    previewFiles.forEach(p => {
+      if (p.isImage && p.thumbnailUrl) {
+        try { URL.revokeObjectURL(p.thumbnailUrl); } catch {}
+      }
+    });
     setFiles([]);
+    setPreviewFiles([]);
     setResult(null);
     setErrorMessage(null);
+    setRenderedPdfImages([]);
+    setExtractedText('');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -115,63 +198,328 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
     setOptions(prev => ({ ...prev, [optionId]: value }));
   };
 
+  // Convert WEBP or non-standard image to clean PNG for pdf-lib
+  const ensureStandardImageBytes = async (file: File): Promise<{ data: Uint8Array; mimeType: string }> => {
+    if (file.type === 'image/jpeg' || file.type === 'image/jpg' || file.type === 'image/png') {
+      const buf = await file.arrayBuffer();
+      return { data: new Uint8Array(buf), mimeType: file.type };
+    }
+    // Convert WEBP, BMP, SVG to PNG in browser
+    const url = URL.createObjectURL(file);
+    try {
+      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = reject;
+        image.src = url;
+      });
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || 800;
+      canvas.height = img.naturalHeight || 600;
+      const ctx = canvas.getContext('2d');
+      ctx?.drawImage(img, 0, 0);
+      const pngBlob = await new Promise<Blob>((resolve) => {
+        canvas.toBlob(b => resolve(b || new Blob()), 'image/png');
+      });
+      const buf = await pngBlob.arrayBuffer();
+      return { data: new Uint8Array(buf), mimeType: 'image/png' };
+    } finally {
+      URL.revokeObjectURL(url);
+    }
+  };
+
   // Run the Tool Processing
   const handleProcess = async () => {
-    if (tool.maxFiles > 0 && files.length === 0) {
+    const isTextComposer = tool.id === 'create-pdf';
+    const isQrCode = tool.id === 'qr-code-to-pdf';
+
+    if (!isTextComposer && !isQrCode && tool.maxFiles > 0 && files.length === 0) {
       setErrorMessage('Please select a file to process.');
       return;
     }
 
     setIsProcessing(true);
     setProgress(5);
-    setStatusMessage('Reading files...');
+    setStatusMessage('Reading input data...');
     setErrorMessage(null);
     setResult(null);
     setSavedToCloud(false);
+    setRenderedPdfImages([]);
+    setExtractedText('');
 
     try {
-      // Convert File[] to FileInputPayload[] (ArrayBuffer -> Uint8Array)
-      const filePayloads: FileInputPayload[] = [];
-      for (const f of files) {
-        const buffer = await f.arrayBuffer();
-        filePayloads.push({
-          name: f.name,
-          size: f.size,
-          mimeType: f.type || 'application/pdf',
-          data: new Uint8Array(buffer)
+      const primaryFile = files[0];
+      const baseName = primaryFile ? primaryFile.name.replace(/\.[^/.]+$/, '') : 'document';
+
+      // ==========================================
+      // Handler 1: PDF to Images (Client Canvas)
+      // ==========================================
+      if (tool.id === 'pdf-to-images' && primaryFile) {
+        setStatusMessage('Extracting and rendering PDF pages...');
+        const buf = await primaryFile.arrayBuffer();
+        const { images, zipBlob } = await convertPdfToImages(
+          new Uint8Array(buf),
+          options.format || 'png',
+          2.0,
+          (p, msg) => {
+            setProgress(p);
+            setStatusMessage(msg);
+          }
+        );
+        setRenderedPdfImages(images);
+        const zipBytes = new Uint8Array(await zipBlob.arrayBuffer());
+        setResult({
+          success: true,
+          toolId: tool.id,
+          outputData: zipBytes,
+          outputMimeType: 'application/zip',
+          outputFilename: `${baseName}-images.zip`,
+          statusMessage: `Successfully converted ${images.length} pages to high-resolution ${options.format?.toUpperCase() || 'PNG'} images.`
         });
       }
 
-      const res = await executeTool({
-        toolId: tool.id,
-        files: filePayloads,
-        options,
-        onProgress: (p, msg) => {
+      // ==========================================
+      // Handler 2: PDF to Plain Text
+      // ==========================================
+      else if (tool.id === 'pdf-to-text' && primaryFile) {
+        setStatusMessage('Reading text streams from PDF...');
+        const buf = await primaryFile.arrayBuffer();
+        const text = await extractTextFromPdf(new Uint8Array(buf), (p, msg) => {
           setProgress(p);
           setStatusMessage(msg);
-        }
-      });
-
-      setResult(res);
-
-      if (res.success) {
-        try {
-          confetti({
-            particleCount: 40,
-            spread: 60,
-            origin: { y: 0.7 }
-          });
-        } catch {}
-
-        onRecordHistory?.({
+        });
+        setExtractedText(text);
+        const enc = new TextEncoder();
+        setResult({
+          success: true,
           toolId: tool.id,
-          filename: res.outputFilename || files[0]?.name || 'document.pdf',
-          size: res.outputData?.byteLength || 0,
-          status: 'completed'
+          outputData: enc.encode(text),
+          outputMimeType: 'text/plain',
+          outputFilename: `${baseName}-extracted.txt`,
+          statusMessage: 'Text content successfully extracted from all pages.'
         });
       }
+
+      // ==========================================
+      // Handler 3: QR Code to PDF
+      // ==========================================
+      else if (tool.id === 'qr-code-to-pdf') {
+        setStatusMessage('Generating vector QR code...');
+        setProgress(30);
+        const qrContent = options.qrContent || 'https://';
+        const qrLabel = options.qrLabel || 'Scan QR Code';
+        const qrDataUrl = await generateQrCodeDataUrl(qrContent);
+
+        setProgress(60);
+        setStatusMessage('Embedding QR code into PDF page...');
+        const pdfDoc = await PDFDocument.create();
+        const page = pdfDoc.addPage([595.28, 841.89]); // A4
+        const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+        // Fetch image bytes from dataUrl
+        const res = await fetch(qrDataUrl);
+        const qrBytes = new Uint8Array(await res.arrayBuffer());
+        const embeddedQr = await pdfDoc.embedPng(qrBytes);
+
+        // Draw title
+        page.drawText(qrLabel, {
+          x: 100,
+          y: 720,
+          size: 24,
+          font: font,
+          color: rgb(0.1, 0.15, 0.25)
+        });
+
+        // Draw QR code centered
+        page.drawImage(embeddedQr, {
+          x: 147.64,
+          y: 370,
+          width: 300,
+          height: 300
+        });
+
+        // Draw content caption
+        page.drawText(qrContent, {
+          x: 100,
+          y: 330,
+          size: 11,
+          font: regularFont,
+          color: rgb(0.4, 0.4, 0.4)
+        });
+
+        const outputBytes = await pdfDoc.save({ useObjectStreams: true });
+        setResult({
+          success: true,
+          toolId: tool.id,
+          outputData: outputBytes,
+          outputMimeType: 'application/pdf',
+          outputFilename: 'qrcode.pdf',
+          statusMessage: 'Printable QR code document generated successfully.'
+        });
+      }
+
+      // ==========================================
+      // Handler 4: Create PDF (Text & Markdown)
+      // ==========================================
+      else if (tool.id === 'create-pdf') {
+        setStatusMessage('Formatting and building PDF...');
+        const res = await executeTool({
+          toolId: 'create-pdf',
+          files: [],
+          options: {
+            title: options.title || 'Document',
+            content: composedText,
+            fontSize: Number(options.fontSize) || 12
+          },
+          onProgress: (p, msg) => {
+            setProgress(p);
+            setStatusMessage(msg);
+          }
+        });
+        setResult(res);
+      }
+
+      // ==========================================
+      // Handler 5: WEBP to JPG / PNG
+      // ==========================================
+      else if ((tool.id === 'webp-to-jpg' || tool.id === 'webp-to-png') && files.length > 0) {
+        setStatusMessage('Converting image formats in browser...');
+        const targetMime = tool.id === 'webp-to-jpg' ? 'image/jpeg' : 'image/png';
+        const targetExt = tool.id === 'webp-to-jpg' ? 'jpg' : 'png';
+
+        if (files.length === 1) {
+          const file = files[0];
+          const imgUrl = URL.createObjectURL(file);
+          const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+            const image = new Image();
+            image.onload = () => resolve(image);
+            image.onerror = reject;
+            image.src = imgUrl;
+          });
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 800;
+          canvas.height = img.naturalHeight || 600;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(img, 0, 0);
+          const blob = await new Promise<Blob>((resolve) => {
+            canvas.toBlob(b => resolve(b || new Blob()), targetMime, 0.92);
+          });
+          URL.revokeObjectURL(imgUrl);
+          const outputBytes = new Uint8Array(await blob.arrayBuffer());
+
+          setResult({
+            success: true,
+            toolId: tool.id,
+            outputData: outputBytes,
+            outputMimeType: targetMime,
+            outputFilename: `${baseName}.${targetExt}`,
+            statusMessage: `Successfully converted to ${targetExt.toUpperCase()}.`
+          });
+        } else {
+          // Multiple images: package into ZIP
+          const zip = new JSZip();
+          for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            setProgress(Math.round((i / files.length) * 80));
+            const imgUrl = URL.createObjectURL(file);
+            const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+              const image = new Image();
+              image.onload = () => resolve(image);
+              image.onerror = reject;
+              image.src = imgUrl;
+            });
+            const canvas = document.createElement('canvas');
+            canvas.width = img.naturalWidth || 800;
+            canvas.height = img.naturalHeight || 600;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0);
+            const blob = await new Promise<Blob>((resolve) => {
+              canvas.toBlob(b => resolve(b || new Blob()), targetMime, 0.92);
+            });
+            URL.revokeObjectURL(imgUrl);
+            zip.file(`${file.name.replace(/\.[^/.]+$/, '')}.${targetExt}`, blob);
+          }
+          const zipBlob = await zip.generateAsync({ type: 'blob' });
+          const zipBytes = new Uint8Array(await zipBlob.arrayBuffer());
+          setResult({
+            success: true,
+            toolId: tool.id,
+            outputData: zipBytes,
+            outputMimeType: 'application/zip',
+            outputFilename: `converted-images.zip`,
+            statusMessage: `Successfully converted ${files.length} images to ${targetExt.toUpperCase()} in ZIP archive.`
+          });
+        }
+      }
+
+      // ==========================================
+      // Handler 6: Default Central PDF Tools
+      // ==========================================
+      else {
+        // Build file payloads with rotation metadata from thumbnail grid
+        const filePayloads: FileInputPayload[] = [];
+        for (const pf of previewFiles) {
+          if (tool.id === 'images-to-pdf') {
+            const converted = await ensureStandardImageBytes(pf.file);
+            filePayloads.push({
+              name: pf.file.name,
+              size: pf.file.size,
+              mimeType: converted.mimeType,
+              data: converted.data,
+              rotation: pf.rotation
+            });
+          } else {
+            const buffer = await pf.file.arrayBuffer();
+            filePayloads.push({
+              name: pf.file.name,
+              size: pf.file.size,
+              mimeType: pf.file.type || 'application/pdf',
+              data: new Uint8Array(buffer),
+              rotation: pf.rotation
+            });
+          }
+        }
+
+        // Add signature bytes if signing
+        let execOptions = { ...options };
+        if (tool.id === 'sign-pdf' && signatureDataUrl) {
+          const res = await fetch(signatureDataUrl);
+          const sigBytes = new Uint8Array(await res.arrayBuffer());
+          execOptions.signatureImageBytes = sigBytes;
+          execOptions.signatureImageMime = 'image/png';
+        }
+
+        const res = await executeTool({
+          toolId: tool.id,
+          files: filePayloads,
+          options: execOptions,
+          onProgress: (p, msg) => {
+            setProgress(p);
+            setStatusMessage(msg);
+          }
+        });
+
+        setResult(res);
+      }
+
+      // Success animation & history recording
+      try {
+        confetti({
+          particleCount: 45,
+          spread: 60,
+          origin: { y: 0.7 }
+        });
+      } catch {}
+
+      onRecordHistory?.({
+        toolId: tool.id,
+        filename: files[0]?.name || 'output-document',
+        size: files[0]?.size || 0,
+        status: 'completed'
+      });
     } catch (err: any) {
-      setErrorMessage(err?.message || 'An error occurred during processing.');
+      setErrorMessage(err?.message || 'An error occurred during document processing.');
       onRecordHistory?.({
         toolId: tool.id,
         filename: files[0]?.name || 'unknown',
@@ -199,6 +547,24 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
+  const handleDownloadSingleImage = (img: PdfPageImage) => {
+    const url = URL.createObjectURL(img.blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `page-${String(img.pageNumber).padStart(3, '0')}.png`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleCopyText = () => {
+    if (!extractedText) return;
+    navigator.clipboard.writeText(extractedText);
+    setCopiedText(true);
+    setTimeout(() => setCopiedText(false), 2000);
+  };
+
   const handleSaveToAccount = () => {
     if (!result?.outputData) return;
     const blob = new Blob([result.outputData as any], {
@@ -223,7 +589,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
 
   return (
     <div className="workspace-container">
-      {/* Back button & Header */}
+      {/* Back button & Breadcrumb */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
         <button
           onClick={onBack}
@@ -246,7 +612,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
         <p className="workspace-desc">{tool.description}</p>
       </div>
 
-      {/* If this is a pending phase tool, display explicit documented status */}
+      {/* If this is a pending phase tool, display explicit documented roadmap status */}
       {isPending ? (
         <div className="result-box" style={{ borderColor: 'var(--border-default)', textAlign: 'left' }}>
           <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
@@ -284,8 +650,77 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
         </div>
       ) : (
         <>
-          {/* File Upload Dropzone */}
-          {tool.maxFiles > 0 && files.length === 0 && (
+          {/* Custom Composer for Create PDF */}
+          {tool.id === 'create-pdf' && !result && (
+            <div style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.25rem',
+              marginBottom: '1.5rem'
+            }}>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.75rem' }}>
+                Text & Markdown Composer
+              </h2>
+              <textarea
+                value={composedText}
+                onChange={(e) => setComposedText(e.target.value)}
+                rows={10}
+                style={{
+                  width: '100%',
+                  padding: '1rem',
+                  fontFamily: 'monospace',
+                  fontSize: '0.875rem',
+                  lineHeight: 1.6,
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-default)',
+                  backgroundColor: 'var(--bg-subtle)',
+                  color: 'var(--text-primary)',
+                  resize: 'vertical'
+                }}
+                placeholder="Type or paste your text here..."
+              />
+            </div>
+          )}
+
+          {/* Custom Live Preview for QR Code */}
+          {tool.id === 'qr-code-to-pdf' && !result && (
+            <div style={{
+              backgroundColor: 'var(--bg-surface)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '1.5rem',
+              textAlign: 'center',
+              marginBottom: '1.5rem'
+            }}>
+              <h2 style={{ fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.5rem' }}>
+                Live Vector QR Code Preview
+              </h2>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                Update the URL in the options below to see real-time code changes:
+              </p>
+              {liveQrCodeUrl ? (
+                <div style={{ display: 'inline-block', padding: '1rem', backgroundColor: '#ffffff', borderRadius: 'var(--radius-md)', boxShadow: 'var(--shadow-md)' }}>
+                  <img src={liveQrCodeUrl} alt="QR Code" style={{ width: '180px', height: '180px' }} />
+                  <div style={{ color: '#0f172a', fontWeight: 700, marginTop: '0.5rem', fontSize: '0.875rem' }}>
+                    {options.qrLabel || 'Scan QR Code'}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>
+                  <QrCode size={48} />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Interactive Signature Pad for Sign PDF */}
+          {tool.id === 'sign-pdf' && !result && (
+            <SignaturePad onSignatureChange={(dataUrl) => setSignatureDataUrl(dataUrl)} />
+          )}
+
+          {/* File Upload Dropzone (When no files are loaded) */}
+          {tool.id !== 'create-pdf' && tool.id !== 'qr-code-to-pdf' && tool.maxFiles > 0 && files.length === 0 && (
             <div
               className={`dropzone-box ${isDragging ? 'dragging' : ''}`}
               onDragOver={handleDragOver}
@@ -305,7 +740,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
               <h2 className="dropzone-title">Choose files or drag & drop them here</h2>
               <p className="dropzone-subtitle">
                 Supported: {tool.supportedInputs.join(', ')} (Max {tool.maxFileSizeMB} MB)
-                {tool.allowMultiple ? ' • Multiple files supported' : ''}
+                {tool.allowMultiple ? ' • Add up to 200 files with thumbnail reordering' : ''}
               </p>
               <button
                 type="button"
@@ -317,52 +752,27 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
             </div>
           )}
 
-          {/* Selected Files List */}
-          {files.length > 0 && !result && (
-            <div className="file-queue">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>
-                  Selected Files ({files.length}{tool.allowMultiple ? ` / ${tool.maxFiles}` : ''})
-                </span>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {tool.allowMultiple && files.length < tool.maxFiles && (
-                    <button
-                      className="btn-secondary"
-                      style={{ height: '32px', fontSize: '0.8125rem' }}
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      + Add more
-                    </button>
-                  )}
-                  <button
-                    className="btn-secondary"
-                    style={{ height: '32px', fontSize: '0.8125rem', color: 'var(--status-error)' }}
-                    onClick={clearAllFiles}
-                  >
-                    Clear All
-                  </button>
-                </div>
-              </div>
+          {/* Hidden Input for Adding More Files */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            style={{ display: 'none' }}
+            accept={tool.supportedInputs.join(',')}
+            multiple={tool.allowMultiple}
+            onChange={handleFileChange}
+          />
 
-              {files.map((file, idx) => (
-                <div key={idx} className="file-item">
-                  <div className="file-item-info">
-                    <FileText size={20} style={{ color: 'var(--accent-primary)', flexShrink: 0 }} />
-                    <div>
-                      <div className="file-name">{file.name}</div>
-                      <div className="file-size">{formatSize(file.size)}</div>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => removeFile(idx)}
-                    className="btn-icon"
-                    title="Remove file"
-                  >
-                    <Trash2 size={16} style={{ color: 'var(--status-error)' }} />
-                  </button>
-                </div>
-              ))}
-            </div>
+          {/* Interactive File Preview Grid (Supports 100+ files, Drag/Drop Reorder, Individual Rotations, Lightbox) */}
+          {previewFiles.length > 0 && !result && (
+            <FilePreviewGrid
+              files={previewFiles}
+              onReorder={handleReorderFiles}
+              onRemove={handleRemoveFile}
+              onRotate={handleRotateFile}
+              onAddMore={() => fileInputRef.current?.click()}
+              onClearAll={clearAllFiles}
+              allowMultiple={tool.allowMultiple}
+            />
           )}
 
           {/* Tool Options Configuration Form */}
@@ -508,12 +918,12 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
           )}
 
           {/* Primary Action Button */}
-          {!result && !isProcessing && (tool.maxFiles === 0 || files.length > 0) && (
+          {!result && !isProcessing && (tool.id === 'create-pdf' || tool.id === 'qr-code-to-pdf' || files.length > 0) && (
             <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
               <button
                 type="button"
                 className="btn-primary"
-                style={{ height: '48px', padding: '0 2rem', fontSize: '1rem' }}
+                style={{ height: '48px', padding: '0 2.25rem', fontSize: '1.0625rem', fontWeight: 700 }}
                 onClick={handleProcess}
               >
                 Execute {tool.name}
@@ -571,6 +981,95 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                   wordBreak: 'break-all'
                 }}>
                   {result.metadata.password}
+                </div>
+              )}
+
+              {/* Extracted Text Preview Card for PDF to Text */}
+              {extractedText && (
+                <div style={{ margin: '1.5rem 0', textAlign: 'left' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontWeight: 600, fontSize: '0.875rem' }}>Extracted Document Text:</span>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      style={{ height: '30px', fontSize: '0.75rem' }}
+                      onClick={handleCopyText}
+                    >
+                      {copiedText ? <Check size={14} style={{ color: 'var(--status-success)' }} /> : <Copy size={14} />}
+                      <span>{copiedText ? 'Copied!' : 'Copy to Clipboard'}</span>
+                    </button>
+                  </div>
+                  <pre style={{
+                    maxHeight: '260px',
+                    overflowY: 'auto',
+                    padding: '1rem',
+                    backgroundColor: 'var(--bg-subtle)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-subtle)',
+                    fontSize: '0.8125rem',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word',
+                    color: 'var(--text-primary)'
+                  }}>
+                    {extractedText}
+                  </pre>
+                </div>
+              )}
+
+              {/* Rendered PDF Images Grid for PDF to Images */}
+              {renderedPdfImages.length > 0 && (
+                <div style={{ margin: '1.5rem 0', textAlign: 'left' }}>
+                  <div style={{ fontWeight: 600, fontSize: '0.875rem', marginBottom: '0.75rem' }}>
+                    Rendered Page Images ({renderedPdfImages.length} Pages):
+                  </div>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))',
+                    gap: '0.75rem',
+                    maxHeight: '340px',
+                    overflowY: 'auto',
+                    padding: '0.5rem',
+                    backgroundColor: 'var(--bg-subtle)',
+                    borderRadius: 'var(--radius-md)'
+                  }}>
+                    {renderedPdfImages.map(img => (
+                      <div
+                        key={img.pageNumber}
+                        style={{
+                          backgroundColor: 'var(--bg-surface)',
+                          borderRadius: 'var(--radius-sm)',
+                          border: '1px solid var(--border-subtle)',
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column'
+                        }}
+                      >
+                        <img
+                          src={img.dataUrl}
+                          alt={`Page ${img.pageNumber}`}
+                          style={{ width: '100%', height: '110px', objectFit: 'contain', backgroundColor: '#ffffff' }}
+                        />
+                        <div style={{
+                          padding: '0.375rem 0.5rem',
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          borderTop: '1px solid var(--border-subtle)'
+                        }}>
+                          <span style={{ fontSize: '0.6875rem', fontWeight: 600 }}>#{img.pageNumber}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadSingleImage(img)}
+                            className="btn-icon"
+                            style={{ width: '22px', height: '22px' }}
+                            title="Download this page image"
+                          >
+                            <Download size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

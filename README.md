@@ -42,3 +42,12 @@ npm run dev
 ```
 
 Visit `http://localhost:5173/` in your browser.
+
+---
+
+## Developer Attribution & Contact
+
+- **Developer:** Md. Nazmul Hasan
+- **Email:** nazmuldesigns0@gmail.com
+- **Repository:** [https://github.com/nazmuldesigns/pdftool.git](https://github.com/nazmuldesigns/pdftool.git)
+- **Live Deployment:** [https://pdf-toolbox-2026.web.app](https://pdf-toolbox-2026.web.app)

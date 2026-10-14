@@ -361,13 +361,14 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     shortDescription: 'Encrypt your PDF with standard password protection.',
     description: 'Apply industry-standard encryption to restrict opening or modifying the document without an authorized password.',
     icon: 'Lock',
-    badge: 'Core',
-    status: 'ready',
+    badge: 'Pending Phase',
+    status: 'pending-phase-2',
+    statusDetails: 'Requires containerized Cloud Run QPDF worker engine for cryptographic PDF encryption.',
     supportedInputs: ['.pdf'],
     supportedMimeTypes: ['application/pdf'],
     outputFormat: '.pdf',
     outputMimeType: 'application/pdf',
-    engine: 'client',
+    engine: 'server',
     maxFileSizeMB: 100,
     maxFiles: 1,
     allowMultiple: false,
@@ -396,13 +397,14 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     shortDescription: 'Remove password and restrictions from authorized PDFs.',
     description: 'Provide the document password once to permanently remove encryption and save an unencumbered PDF for easy viewing and editing.',
     icon: 'Unlock',
-    badge: 'Core',
-    status: 'ready',
+    badge: 'Pending Phase',
+    status: 'pending-phase-2',
+    statusDetails: 'Requires containerized Cloud Run QPDF worker engine for cryptographic PDF decryption.',
     supportedInputs: ['.pdf'],
     supportedMimeTypes: ['application/pdf'],
     outputFormat: '.pdf',
     outputMimeType: 'application/pdf',
-    engine: 'client',
+    engine: 'server',
     maxFileSizeMB: 100,
     maxFiles: 1,
     allowMultiple: false,
@@ -859,9 +861,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     shortDescription: 'Trim margins and crop specific regions across document pages.',
     description: 'Set custom page margins or crop boxes to eliminate unnecessary white space, headers, or scanning borders.',
     icon: 'Crop',
-    badge: 'Pending Phase',
-    status: 'pending-phase-4',
-    statusDetails: 'Scheduled for Phase 4: Interactive Editing & Page Geometry tools.',
+    badge: 'New',
+    status: 'ready',
     supportedInputs: ['.pdf'],
     supportedMimeTypes: ['application/pdf'],
     outputFormat: '.pdf',
@@ -870,7 +871,17 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     maxFileSizeMB: 100,
     maxFiles: 1,
     allowMultiple: false,
-    options: [],
+    options: [
+      {
+        id: 'margin',
+        label: 'Margin Trim (pt)',
+        type: 'number',
+        defaultValue: 28,
+        min: 5,
+        max: 150,
+        description: 'Amount of margin to trim from all sides (28pt ≈ 10mm)'
+      }
+    ],
     keywords: ['crop', 'trim', 'margins', 'cut margins']
   },
   {
@@ -880,9 +891,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     shortDescription: 'Resize pages to standard dimensions (A4, Letter, A3, Legal).',
     description: 'Scale or pad pages to match international paper standards while preserving content proportions.',
     icon: 'Maximize2',
-    badge: 'Pending Phase',
-    status: 'pending-phase-4',
-    statusDetails: 'Scheduled for Phase 4: Page Geometry and Scaling.',
+    badge: 'New',
+    status: 'ready',
     supportedInputs: ['.pdf'],
     supportedMimeTypes: ['application/pdf'],
     outputFormat: '.pdf',
@@ -891,7 +901,30 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     maxFileSizeMB: 100,
     maxFiles: 1,
     allowMultiple: false,
-    options: [],
+    options: [
+      {
+        id: 'pageSize',
+        label: 'Target Page Size',
+        type: 'select',
+        defaultValue: 'a4',
+        options: [
+          { label: 'A4 (210 × 297 mm)', value: 'a4' },
+          { label: 'US Letter (8.5 × 11 in)', value: 'letter' },
+          { label: 'US Legal (8.5 × 14 in)', value: 'legal' },
+          { label: 'A3 (297 × 420 mm)', value: 'a3' }
+        ]
+      },
+      {
+        id: 'orientation',
+        label: 'Orientation',
+        type: 'select',
+        defaultValue: 'portrait',
+        options: [
+          { label: 'Portrait', value: 'portrait' },
+          { label: 'Landscape', value: 'landscape' }
+        ]
+      }
+    ],
     keywords: ['resize', 'page size', 'a4', 'letter', 'scale']
   },
   {
@@ -901,9 +934,8 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     shortDescription: 'Overlay a letterhead or template PDF onto existing document pages.',
     description: 'Superimpose corporate stationery, background graphics, or legal templates across every page.',
     icon: 'Layers2',
-    badge: 'Pending Phase',
-    status: 'pending-phase-4',
-    statusDetails: 'Scheduled for Phase 4: Multi-layer document composition.',
+    badge: 'New',
+    status: 'ready',
     supportedInputs: ['.pdf'],
     supportedMimeTypes: ['application/pdf'],
     outputFormat: '.pdf',
@@ -912,7 +944,18 @@ export const TOOLS_REGISTRY: ToolDefinition[] = [
     maxFileSizeMB: 100,
     maxFiles: 2,
     allowMultiple: true,
-    options: [],
+    options: [
+      {
+        id: 'opacity',
+        label: 'Overlay Opacity',
+        type: 'range',
+        defaultValue: 0.85,
+        min: 0.1,
+        max: 1.0,
+        step: 0.05,
+        description: 'Transparency of the overlay layer (0.1 to 1.0)'
+      }
+    ],
     keywords: ['overlay', 'letterhead', 'stationery', 'background', 'underlay']
   },
 

@@ -14,12 +14,16 @@ import { generateSecurePassword } from './operations/security.js';
 import { halvePdfPages } from './operations/halvePages.js';
 import { generateInvoicePdf } from './operations/invoice.js';
 import { signPdfDocument } from './operations/sign.js';
+import { changePdfPageSize } from './operations/changePageSize.js';
+import { cropPdfPages } from './operations/cropPages.js';
+import { overlayPdfDocuments } from './operations/overlayPdf.js';
 
 export interface FileInputPayload {
   name: string;
   size: number;
   mimeType: string;
   data: Uint8Array;
+  rotation?: number;
 }
 
 export interface ToolExecutionRequest {
@@ -265,7 +269,8 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
       const imagePayloads: ImageInput[] = files.map(f => ({
         name: f.name,
         data: f.data,
-        mimeType: f.mimeType
+        mimeType: f.mimeType,
+        rotation: f.rotation
       }));
       const pdfBytes = await convertImagesToPdf(imagePayloads, {
         pageSize: options.pageSize || 'a4',
@@ -280,6 +285,23 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
         outputMimeType: 'application/pdf',
         outputFilename: `${baseName}-images.pdf`,
         statusMessage: `Converted ${files.length} images to PDF.`
+      };
+    }
+
+    case 'create-pdf': {
+      const content = options.content || (primaryFile ? new TextDecoder('utf-8').decode(primaryFile.data) : 'My PDF Document');
+      const pdfBytes = await convertTextToPdf(content, {
+        documentTitle: options.title || 'Created Document',
+        fontSize: Number(options.fontSize) || 12,
+        onProgress
+      });
+      return {
+        success: true,
+        toolId,
+        outputData: pdfBytes,
+        outputMimeType: 'application/pdf',
+        outputFilename: `${(options.title || 'document').toLowerCase().replace(/[^a-z0-9_-]/gi, '-')}.pdf`,
+        statusMessage: 'New PDF document created successfully.'
       };
     }
 
@@ -298,6 +320,53 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
         outputMimeType: 'application/pdf',
         outputFilename: `${baseName}.pdf`,
         statusMessage: 'Text document formatted and rendered to PDF.'
+      };
+    }
+
+    case 'change-page-size': {
+      const resizedBytes = await changePdfPageSize(primaryFile.data, {
+        pageSize: options.pageSize || 'a4',
+        orientation: options.orientation || 'portrait',
+        onProgress
+      });
+      return {
+        success: true,
+        toolId,
+        outputData: resizedBytes,
+        outputMimeType: 'application/pdf',
+        outputFilename: `${baseName}-resized.pdf`,
+        statusMessage: `Document page size changed to ${(options.pageSize || 'A4').toUpperCase()}.`
+      };
+    }
+
+    case 'crop-pages': {
+      const croppedBytes = await cropPdfPages(primaryFile.data, {
+        margin: Number(options.margin) || 28.3,
+        onProgress
+      });
+      return {
+        success: true,
+        toolId,
+        outputData: croppedBytes,
+        outputMimeType: 'application/pdf',
+        outputFilename: `${baseName}-cropped.pdf`,
+        statusMessage: 'Document margins cropped successfully.'
+      };
+    }
+
+    case 'overlay-pdf': {
+      const overlayFile = files[1] || primaryFile;
+      const overlayBytes = await overlayPdfDocuments(primaryFile.data, overlayFile.data, {
+        opacity: Number(options.opacity) || 0.85,
+        onProgress
+      });
+      return {
+        success: true,
+        toolId,
+        outputData: overlayBytes,
+        outputMimeType: 'application/pdf',
+        outputFilename: `${baseName}-overlay.pdf`,
+        statusMessage: 'Document overlay applied successfully.'
       };
     }
 
@@ -338,6 +407,8 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
     case 'sign-pdf': {
       const signedBytes = await signPdfDocument(primaryFile.data, {
         signatureText: options.signatureText || 'Digitally Signed',
+        signatureImageBytes: options.signatureImageBytes,
+        signatureImageMime: options.signatureImageMime || 'image/png',
         pageNumber: Number(options.pageNumber) || undefined,
         onProgress
       });

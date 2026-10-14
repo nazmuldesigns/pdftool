@@ -1,6 +1,6 @@
 import React from 'react';
 import { APP_CONFIG } from '@pdf-toolbox/shared';
-import { Layers, ShieldCheck } from 'lucide-react';
+import { Layers, ShieldCheck, Mail, User, Code2 } from 'lucide-react';
 
 interface FooterProps {
   onNavigateCategory: (cat: string) => void;
@@ -61,19 +61,77 @@ export const Footer: React.FC<FooterProps> = ({
 
           {/* Resources & Legal */}
           <div>
-            <h4 className="footer-heading">Support & Legal</h4>
+            <h4 className="footer-heading">Support & Developer</h4>
             <ul className="footer-links">
               <li><a href="#faq" onClick={(e) => { e.preventDefault(); onOpenFaq(); }}>Frequently Asked Questions</a></li>
               <li><a href="#privacy" onClick={(e) => { e.preventDefault(); onOpenPrivacy(); }}>Privacy Policy & Retention</a></li>
               <li><a href="#terms" onClick={(e) => { e.preventDefault(); onOpenTerms(); }}>Terms of Service</a></li>
-              <li><a href={`mailto:${APP_CONFIG.supportEmail}`}>Contact Support</a></li>
+              <li><a href={`mailto:${APP_CONFIG.contactEmail}`}>Contact: {APP_CONFIG.contactEmail}</a></li>
             </ul>
           </div>
         </div>
 
-        <div className="footer-bottom">
+        {/* Developer Attribution Box */}
+        <div style={{
+          marginTop: '2rem',
+          padding: '1.25rem 1.5rem',
+          backgroundColor: 'var(--bg-subtle)',
+          borderRadius: 'var(--radius-lg)',
+          border: '1px solid var(--border-subtle)',
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1rem',
+          fontSize: '0.875rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <span style={{ color: 'var(--text-muted)' }}>Lead Developer:</span>
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
+              <User size={15} style={{ color: 'var(--accent-primary)' }} />
+              {APP_CONFIG.developer}
+            </span>
+            <span style={{ color: 'var(--text-muted)' }}>•</span>
+            <span style={{ color: 'var(--text-muted)' }}>Direct Contact:</span>
+            <a
+              href={`mailto:${APP_CONFIG.contactEmail}`}
+              style={{
+                color: 'var(--accent-primary)',
+                fontWeight: 600,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                textDecoration: 'none'
+              }}
+            >
+              <Mail size={15} />
+              {APP_CONFIG.contactEmail}
+            </a>
+          </div>
+
           <div>
-            © {new Date().getFullYear()} {APP_CONFIG.name}. Built with privacy and speed.
+            <a
+              href="https://github.com/nazmuldesigns/pdftool"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                color: 'var(--text-secondary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                textDecoration: 'none',
+                fontWeight: 600
+              }}
+            >
+              <Code2 size={16} />
+              <span>github.com/nazmuldesigns/pdftool</span>
+            </a>
+          </div>
+        </div>
+
+        <div className="footer-bottom" style={{ marginTop: '1.5rem' }}>
+          <div>
+            © {new Date().getFullYear()} {APP_CONFIG.name}. Engineered by {APP_CONFIG.developer}. Private & Client-First.
           </div>
           <div style={{ display: 'flex', gap: '1.25rem' }}>
             <a href="#privacy" onClick={(e) => { e.preventDefault(); onOpenPrivacy(); }}>Privacy</a>

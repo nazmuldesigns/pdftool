@@ -185,6 +185,32 @@ export const AccountModal: React.FC<AccountModalProps> = ({
                 <Shield size={14} style={{ display: 'inline', marginRight: '4px' }} />
                 Protected by Firebase Authentication. Guest documents remain 100% private in local browser memory.
               </div>
+
+              {/* Developer Attribution Card */}
+              <div style={{
+                marginTop: '1rem',
+                padding: '0.875rem',
+                backgroundColor: 'var(--bg-subtle)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-subtle)',
+                fontSize: '0.8125rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.25rem'
+              }}>
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Developer Attribution
+                </div>
+                <div style={{ color: 'var(--text-secondary)' }}>
+                  Lead Developer: <strong>Md. Nazmul Hasan</strong>
+                </div>
+                <div>
+                  Contact: <a href="mailto:nazmuldesigns0@gmail.com" style={{ color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600 }}>nazmuldesigns0@gmail.com</a>
+                </div>
+                <div>
+                  Repository: <a href="https://github.com/nazmuldesigns/pdftool" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--text-secondary)', textDecoration: 'none' }}>github.com/nazmuldesigns/pdftool</a>
+                </div>
+              </div>
             </div>
           )}
         </div>

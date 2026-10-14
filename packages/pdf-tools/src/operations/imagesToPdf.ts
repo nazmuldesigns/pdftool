@@ -1,9 +1,10 @@
-import { PDFDocument, PageSizes } from 'pdf-lib';
+import { PDFDocument, PageSizes, degrees } from 'pdf-lib';
 
 export interface ImageInput {
   name: string;
   data: Uint8Array;
   mimeType: string;
+  rotation?: number; // 0, 90, 180, 270
 }
 
 export interface ImagesToPdfOptions {
@@ -43,7 +44,7 @@ export async function convertImagesToPdf(
     if (img.mimeType === 'image/jpeg' || img.mimeType === 'image/jpg') {
       embeddedImage = await pdfDoc.embedJpg(img.data);
     } else {
-      // Default to PNG embedding (if webp/gif was converted to png or png directly)
+      // Default to PNG embedding
       embeddedImage = await pdfDoc.embedPng(img.data);
     }
 
@@ -76,6 +77,11 @@ export async function convertImagesToPdf(
 
     const page = pdfDoc.addPage([pageWidth, pageHeight]);
 
+    // Apply individual image rotation if set in thumbnail preview
+    if (img.rotation) {
+      page.setRotation(degrees(img.rotation % 360));
+    }
+
     // Calculate scaled dimensions to fit within page margins
     const availableWidth = pageWidth - (pad * 2);
     const availableHeight = pageHeight - (pad * 2);
@@ -83,7 +89,7 @@ export async function convertImagesToPdf(
     const scale = Math.min(
       availableWidth / imgDims.width,
       availableHeight / imgDims.height,
-      pageSize === 'fit' ? 1 : 1 // don't upscale on standard pages beyond fit
+      pageSize === 'fit' ? 1 : 1
     );
 
     const drawWidth = imgDims.width * scale;
@@ -102,7 +108,7 @@ export async function convertImagesToPdf(
 
   onProgress?.(92, 'Generating PDF output...');
   const outputBytes = await pdfDoc.save({ useObjectStreams: true });
-  onProgress?.(100, 'Images converted to PDF.');
+  onProgress?.(100, `Successfully converted ${total} images to PDF.`);
 
   return outputBytes;
 }

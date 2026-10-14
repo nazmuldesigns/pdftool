@@ -14,3 +14,6 @@ export * from './operations/security.js';
 export * from './operations/halvePages.js';
 export * from './operations/invoice.js';
 export * from './operations/sign.js';
+export * from './operations/changePageSize.js';
+export * from './operations/cropPages.js';
+export * from './operations/overlayPdf.js';

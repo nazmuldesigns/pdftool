@@ -21,6 +21,9 @@ import {
   halvePdfPages,
   generateInvoicePdf,
   signPdfDocument,
+  changePdfPageSize,
+  cropPdfPages,
+  overlayPdfDocuments,
   executeTool
 } from '../packages/pdf-tools/dist/index.js';
 
@@ -225,4 +228,31 @@ test('PDF Sign Operation - places electronic signature on document', async () =>
   });
   const loaded = await PDFDocument.load(signed);
   assert.equal(loaded.getPageCount(), 3);
+});
+
+test('PDF Change Page Size Operation - resizes pages to Letter/A4 dimensions', async () => {
+  const source = await createTestPdf(2, 'A4 Doc');
+  const resized = await changePdfPageSize(source, { pageSize: 'letter' });
+  const loaded = await PDFDocument.load(resized);
+  assert.equal(loaded.getPageCount(), 2);
+  const size = loaded.getPages()[0].getSize();
+  assert.equal(Math.round(size.width), 612);
+  assert.equal(Math.round(size.height), 792);
+});
+
+test('PDF Crop Pages Operation - applies margin crop boxes', async () => {
+  const source = await createTestPdf(2, 'Full bleed');
+  const cropped = await cropPdfPages(source, { margin: 20 });
+  const loaded = await PDFDocument.load(cropped);
+  assert.equal(loaded.getPageCount(), 2);
+  const cropBox = loaded.getPages()[0].getCropBox();
+  assert.ok(cropBox.x >= 20, 'Crop box inset applied');
+});
+
+test('PDF Overlay Operation - stamps overlay onto document pages', async () => {
+  const source = await createTestPdf(2, 'Base Document');
+  const overlay = await createTestPdf(1, 'Corporate Letterhead');
+  const combined = await overlayPdfDocuments(source, overlay, { opacity: 0.9 });
+  const loaded = await PDFDocument.load(combined);
+  assert.equal(loaded.getPageCount(), 2);
 });
