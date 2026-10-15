@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { SignaturePad } from './SignaturePad';
 import { Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import { useI18n } from '../utils/i18n';
 
 export interface DocumentSignatureData {
   signatureDataUrl: string;
@@ -23,6 +24,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
   file,
   onChange
 }) => {
+  const { t } = useI18n();
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [numPages, setNumPages] = useState<number>(1);
   const [selectedPage, setSelectedPage] = useState<number>(1);
@@ -157,7 +159,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
             1
           </div>
           <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-            Create Your Electronic Signature
+            {t('signer.step1Title')}
           </h3>
         </div>
         <SignaturePad onSignatureChange={setSignatureDataUrl} />
@@ -194,10 +196,10 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
               </div>
               <div>
                 <h3 style={{ fontSize: '1.0625rem', fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>
-                  Drag & Position Signature on Document
+                  {t('signer.step2Title')}
                 </h3>
                 <span style={{ fontSize: '0.8125rem', color: 'var(--text-muted)' }}>
-                  Click anywhere on the page to place your signature stamp.
+                  {t('signer.step2Desc')}
                 </span>
               </div>
             </div>
@@ -205,7 +207,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
             {/* Page Navigator */}
             {numPages > 1 && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Page:</span>
+                <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-secondary)' }}>{t('signer.page')}:</span>
                 <button
                   type="button"
                   className="btn-icon"
@@ -223,7 +225,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                 >
                   {Array.from({ length: numPages }).map((_, i) => (
                     <option key={i + 1} value={i + 1}>
-                      Page {i + 1} of {numPages} {i + 1 === numPages ? '(Last Page)' : ''}
+                      {t('signer.page')} {i + 1} {t('signer.of')} {numPages} {i + 1 === numPages ? t('signer.lastPage') : ''}
                     </option>
                   ))}
                 </select>
@@ -270,11 +272,11 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                 {pageThumbnailUrl ? (
                   <img
                     src={pageThumbnailUrl}
-                    alt={`Page ${selectedPage}`}
+                    alt={`${t('signer.page')} ${selectedPage}`}
                     style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none' }}
                   />
                 ) : (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>Rendering document page...</div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.875rem' }}>{t('signer.rendering')}</div>
                 )}
 
                 {/* Interactive Signature Overlay Stamp */}
@@ -312,7 +314,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                 </div>
               </div>
               <span style={{ display: 'inline-block', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-                Page {selectedPage} of {numPages} • Click to move signature
+                {t('signer.page')} {selectedPage} {t('signer.of')} {numPages} • {t('signer.clickToMove')}
               </span>
             </div>
 
@@ -320,7 +322,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.375rem' }}>
-                  Quick Position Presets
+                  {t('signer.presets')}
                 </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem' }}>
                   <button
@@ -329,7 +331,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                     onClick={() => handlePresetPosition('bottom-right')}
                     style={{ height: '30px', fontSize: '0.75rem', padding: '0 0.5rem' }}
                   >
-                    Bottom Right (Contract Standard)
+                    {t('signer.bottomRight')}
                   </button>
                   <button
                     type="button"
@@ -337,7 +339,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                     onClick={() => handlePresetPosition('bottom-left')}
                     style={{ height: '30px', fontSize: '0.75rem', padding: '0 0.5rem' }}
                   >
-                    Bottom Left
+                    {t('signer.bottomLeft')}
                   </button>
                   <button
                     type="button"
@@ -345,7 +347,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                     onClick={() => handlePresetPosition('center')}
                     style={{ height: '30px', fontSize: '0.75rem', padding: '0 0.5rem' }}
                   >
-                    Page Center
+                    {t('signer.center')}
                   </button>
                 </div>
               </div>
@@ -353,7 +355,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
               {/* Stamp Size Slider */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 600, marginBottom: '0.25rem' }}>
-                  <span>Signature Size (Width)</span>
+                  <span>{t('signer.stampSize')}</span>
                   <span>{stampWidth}px</span>
                 </div>
                 <input
@@ -385,7 +387,7 @@ export const InteractiveDocumentSigner: React.FC<InteractiveDocumentSignerProps>
                     onChange={(e) => setIncludeDate(e.target.checked)}
                   />
                   <Calendar size={14} style={{ color: 'var(--accent-primary)' }} />
-                  <span>Append Date Stamp Under Signature</span>
+                  <span>{t('signer.dateStamp')}</span>
                 </label>
 
                 {includeDate && (

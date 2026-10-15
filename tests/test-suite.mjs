@@ -24,6 +24,9 @@ import {
   changePdfPageSize,
   cropPdfPages,
   overlayPdfDocuments,
+  removePdfPages,
+  rearrangePdfPages,
+  convertTextToPdf,
   executeTool
 } from '../packages/pdf-tools/dist/index.js';
 
@@ -314,3 +317,27 @@ test('Page Organizer Assembly Logic - handles reordering, rotation and page excl
   assert.equal(loaded.getPages()[2].getRotation().angle, 180);
 });
 
+test('PDF Remove Pages Operation - deletes specific page indices', async () => {
+  const source = await createTestPdf(5, 'Remove Pages Test');
+  const result = await removePdfPages(source, { pagesToRemove: '2, 4' });
+  const loaded = await PDFDocument.load(result);
+  assert.equal(loaded.getPageCount(), 3, '5 pages minus 2 deleted = 3 pages');
+});
+
+test('PDF Rearrange Pages Operation - reorders pages by custom sequence or reverse', async () => {
+  const source = await createTestPdf(3, 'Order Test');
+  const reversed = await rearrangePdfPages(source, { pageOrder: 'reverse' });
+  const loaded = await PDFDocument.load(reversed);
+  assert.equal(loaded.getPageCount(), 3);
+
+  const customOrder = await rearrangePdfPages(source, { pageOrder: '3, 1' });
+  const loadedCustom = await PDFDocument.load(customOrder);
+  assert.equal(loadedCustom.getPageCount(), 2);
+});
+
+test('PDF Text To PDF Operation - converts markdown and plain text to PDF', async () => {
+  const markdown = '# Document Title\n\nThis is a test paragraph with multiple sentences.\n\n- Item 1\n- Item 2';
+  const pdfBytes = await convertTextToPdf(markdown, { documentTitle: 'Executive Summary', fontSize: 12 });
+  const loaded = await PDFDocument.load(pdfBytes);
+  assert.ok(loaded.getPageCount() >= 1);
+});

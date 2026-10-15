@@ -1,11 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { RotateCcw, PenTool, Type, Check } from 'lucide-react';
+import { useI18n } from '../utils/i18n';
 
 interface SignaturePadProps {
   onSignatureChange: (signatureDataUrl: string | null) => void;
 }
 
 export const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange }) => {
+  const { t } = useI18n();
   const [mode, setMode] = useState<'draw' | 'type'>('draw');
   const [typedName, setTypedName] = useState('');
   const [strokeColor, setStrokeColor] = useState('#1e3a8a'); // navy blue
@@ -119,7 +121,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange })
             onClick={() => setMode('draw')}
           >
             <PenTool size={14} />
-            <span>Draw Signature</span>
+            <span>{t('signer.drawSignature')}</span>
           </button>
           <button
             type="button"
@@ -134,7 +136,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange })
             onClick={() => setMode('type')}
           >
             <Type size={14} />
-            <span>Type Signature</span>
+            <span>{t('signer.typeSignature')}</span>
           </button>
         </div>
 
@@ -206,14 +208,14 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange })
             }}
           >
             <RotateCcw size={12} />
-            <span>Clear</span>
+            <span>{t('signer.clear')}</span>
           </button>
         </div>
       ) : (
         <div>
           <input
             type="text"
-            placeholder="Type your name or initials (e.g. John Doe)"
+            placeholder={t('signer.typePlaceholder')}
             value={typedName}
             onChange={(e) => setTypedName(e.target.value)}
             className="form-input"
@@ -228,7 +230,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({ onSignatureChange })
         </div>
       )}
       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
-        Electronic signature will be embedded cleanly into the generated PDF.
+        {t('signer.padNote')}
       </div>
     </div>
   );
