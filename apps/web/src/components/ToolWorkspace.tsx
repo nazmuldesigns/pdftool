@@ -1,11 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ToolDefinition } from '@pdf-toolbox/shared';
-import { executeTool } from '@pdf-toolbox/pdf-tools';
+import { executeTool, addWatermark } from '@pdf-toolbox/pdf-tools';
 import type { ToolExecutionResponse, FileInputPayload } from '@pdf-toolbox/pdf-tools';
 import { IconRenderer } from './IconRenderer';
 import { FilePreviewGrid } from './FilePreviewGrid';
 import type { PreviewFileItem } from './FilePreviewGrid';
 import { SignaturePad } from './SignaturePad';
+import { VisualPageOrganizer } from './VisualPageOrganizer';
+import type { PageStateItem } from './VisualPageOrganizer';
+import { WatermarkLivePreview } from './WatermarkLivePreview';
+import type { WatermarkSettings } from './WatermarkLivePreview';
 import {
   getPdfFirstPageThumbnail,
   convertPdfToImages,
@@ -13,7 +17,7 @@ import {
   generateQrCodeDataUrl
 } from '../utils/pdfHelper';
 import type { PdfPageImage } from '../utils/pdfHelper';
-import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, degrees } from 'pdf-lib';
 import JSZip from 'jszip';
 import {
   UploadCloud,
@@ -95,9 +99,20 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   const [copiedText, setCopiedText] = useState(false);
   const [renderedPdfImages, setRenderedPdfImages] = useState<PdfPageImage[]>([]);
   const [liveQrCodeUrl, setLiveQrCodeUrl] = useState<string>('');
+  const [visualPages, setVisualPages] = useState<PageStateItem[]>([]);
+  const [watermarkSettings, setWatermarkSettings] = useState<WatermarkSettings | null>(null);
   const [composedText, setComposedText] = useState<string>(
     '# Document Title\n\nType your content here or paste text to convert directly to a clean PDF document.\n\n- Point 1\n- Point 2\n- Point 3'
   );
+
+  const isPageOrganizerTool = [
+    'rearrange-pages',
+    'remove-pages',
+    'rotate-pages',
+    'extract-pages',
+    'sort-pages',
+    'organize-pdf'
+  ].includes(tool.id);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isPending = tool.status.startsWith('pending-');
@@ -226,6 +241,8 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
     setErrorMessage(null);
     setRenderedPdfImages([]);
     setExtractedText('');
+    setVisualPages([]);
+    setWatermarkSettings(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -486,6 +503,81 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
             statusMessage: `Successfully converted ${files.length} images to ${targetExt.toUpperCase()} in ZIP archive.`
           });
         }
+      }
+
+      // ==========================================
+      // Handler 4: Interactive Visual Page Organizer
+      // ==========================================
+      else if (isPageOrganizerTool && visualPages.length > 0 && primaryFile) {
+        setStatusMessage('Assembling newly organized PDF document...');
+        setProgress(30);
+
+        const activePages = visualPages.filter(p => !p.isDeleted);
+        if (activePages.length === 0) {
+          throw new Error('At least one page must remain in the document.');
+        }
+
+        const buf = await primaryFile.arrayBuffer();
+        const srcDoc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
+        const outDoc = await PDFDocument.create();
+
+        setProgress(60);
+        for (let i = 0; i < activePages.length; i++) {
+          const item = activePages[i];
+          const [copiedPage] = await outDoc.copyPages(srcDoc, [item.originalPageNumber - 1]);
+          if (item.rotation) {
+            copiedPage.setRotation(degrees((copiedPage.getRotation().angle + item.rotation) % 360));
+          }
+          outDoc.addPage(copiedPage);
+        }
+
+        setProgress(90);
+        const outBytes = await outDoc.save({ useObjectStreams: true });
+        setResult({
+          success: true,
+          toolId: tool.id,
+          outputData: outBytes,
+          outputMimeType: 'application/pdf',
+          outputFilename: `${baseName}-organized.pdf`,
+          statusMessage: `Successfully organized ${activePages.length} pages (with custom order and rotations applied).`
+        });
+      }
+
+      // ==========================================
+      // Handler 5: Interactive Watermark Tool
+      // ==========================================
+      else if (tool.id === 'add-watermark' && primaryFile) {
+        setStatusMessage('Stamping customized watermark across pages...');
+        setProgress(30);
+        const buf = await primaryFile.arrayBuffer();
+        const wmText = watermarkSettings?.text || options.watermarkText || 'CONFIDENTIAL';
+        const wmOptions = {
+          watermarkText: wmText,
+          fontSize: watermarkSettings?.fontSize || Number(options.fontSize) || 42,
+          opacity: watermarkSettings?.opacity !== undefined ? watermarkSettings.opacity : (Number(options.opacity) || 0.35),
+          rotation: watermarkSettings?.rotation !== undefined ? watermarkSettings.rotation : (Number(options.rotation) || 45),
+          color: watermarkSettings?.color || options.color || 'gray',
+          position: watermarkSettings?.position || 'center',
+          xPercent: watermarkSettings?.xPercent || 50,
+          yPercent: watermarkSettings?.yPercent || 50
+        };
+
+        const outBytes = await addWatermark(new Uint8Array(buf), {
+          ...wmOptions,
+          onProgress: (p, msg) => {
+            setProgress(p);
+            setStatusMessage(msg);
+          }
+        });
+
+        setResult({
+          success: true,
+          toolId: tool.id,
+          outputData: outBytes,
+          outputMimeType: 'application/pdf',
+          outputFilename: `${baseName}-watermarked.pdf`,
+          statusMessage: 'Customized watermark successfully stamped across all document pages.'
+        });
       }
 
       // ==========================================
@@ -825,7 +917,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
           />
 
           {/* Interactive File Preview Grid (Supports 100+ files, Drag/Drop Reorder, Individual Rotations, Lightbox) */}
-          {previewFiles.length > 0 && !result && (
+          {previewFiles.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && (
             <FilePreviewGrid
               files={previewFiles}
               onReorder={handleReorderFiles}
@@ -837,8 +929,32 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
             />
           )}
 
+          {/* Interactive Visual Page Organizer for multi-page documents */}
+          {isPageOrganizerTool && files.length > 0 && !result && (files[0].type === 'application/pdf' || files[0].name.toLowerCase().endsWith('.pdf')) && (
+            <VisualPageOrganizer
+              file={files[0]}
+              toolId={tool.id}
+              onChange={setVisualPages}
+            />
+          )}
+
+          {/* Interactive Live Watermark Positioner */}
+          {tool.id === 'add-watermark' && files.length > 0 && !result && (files[0].type === 'application/pdf' || files[0].name.toLowerCase().endsWith('.pdf')) && (
+            <WatermarkLivePreview
+              file={files[0]}
+              initialSettings={{
+                text: options.watermarkText,
+                fontSize: options.fontSize,
+                opacity: options.opacity,
+                rotation: options.rotation,
+                color: options.color
+              }}
+              onChange={setWatermarkSettings}
+            />
+          )}
+
           {/* Tool Options Configuration Form */}
-          {tool.options.length > 0 && !result && (
+          {tool.options.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && (
             <div className="options-panel">
               <h2 className="options-title">
                 <span>Configure Options</span>

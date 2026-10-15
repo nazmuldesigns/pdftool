@@ -5,7 +5,10 @@ export interface WatermarkOptions {
   fontSize?: number;
   opacity?: number;
   rotation?: number;
-  color?: 'gray' | 'red' | 'blue' | 'black';
+  color?: 'gray' | 'red' | 'blue' | 'black' | 'purple' | 'green';
+  position?: 'center' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right' | 'custom';
+  xPercent?: number;
+  yPercent?: number;
   onProgress?: (progress: number, message: string) => void;
 }
 
@@ -19,6 +22,9 @@ export async function addWatermark(
     opacity = 0.3,
     rotation = 45,
     color = 'gray',
+    position = 'center',
+    xPercent = 50,
+    yPercent = 50,
     onProgress
   } = options;
 
@@ -32,6 +38,8 @@ export async function addWatermark(
   if (color === 'red') chosenColor = rgb(0.85, 0.1, 0.1);
   if (color === 'blue') chosenColor = rgb(0.1, 0.3, 0.85);
   if (color === 'black') chosenColor = rgb(0, 0, 0);
+  if (color === 'purple') chosenColor = rgb(0.58, 0.2, 0.92);
+  if (color === 'green') chosenColor = rgb(0.09, 0.64, 0.29);
 
   const textWidth = font.widthOfTextAtSize(watermarkText, fontSize);
   const textHeight = font.heightAtSize(fontSize);
@@ -39,8 +47,25 @@ export async function addWatermark(
   onProgress?.(30, `Stamping watermark across ${total} pages...`);
   pages.forEach((page, i) => {
     const { width, height } = page.getSize();
-    const x = (width - textWidth) / 2;
-    const y = (height - textHeight) / 2;
+    let x = (width - textWidth) / 2;
+    let y = (height - textHeight) / 2;
+
+    if (position === 'top-left') {
+      x = 40;
+      y = height - textHeight - 40;
+    } else if (position === 'top-right') {
+      x = width - textWidth - 40;
+      y = height - textHeight - 40;
+    } else if (position === 'bottom-left') {
+      x = 40;
+      y = 40;
+    } else if (position === 'bottom-right') {
+      x = width - textWidth - 40;
+      y = 40;
+    } else if (position === 'custom') {
+      x = Math.max(20, Math.min(width - textWidth - 20, (width * xPercent) / 100 - textWidth / 2));
+      y = Math.max(20, Math.min(height - textHeight - 20, height - ((height * yPercent) / 100) - textHeight / 2));
+    }
 
     page.drawText(watermarkText, {
       x,

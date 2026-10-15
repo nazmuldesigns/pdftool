@@ -202,6 +202,9 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
         opacity: Number(options.opacity) || 0.3,
         rotation: Number(options.rotation) || 45,
         color: options.color || 'gray',
+        position: options.position || 'center',
+        xPercent: options.xPercent !== undefined ? Number(options.xPercent) : 50,
+        yPercent: options.yPercent !== undefined ? Number(options.yPercent) : 50,
         onProgress
       });
       return {

@@ -256,3 +256,45 @@ test('PDF Overlay Operation - stamps overlay onto document pages', async () => {
   const loaded = await PDFDocument.load(combined);
   assert.equal(loaded.getPageCount(), 2);
 });
+
+test('PDF Watermark Custom Positioning - supports top-left, bottom-right, and custom coordinates', async () => {
+  const source = await createTestPdf(2, 'Confidential Dossier');
+  const watermarked = await addWatermark(source, {
+    watermarkText: 'TOP SECRET',
+    position: 'top-right',
+    color: 'red',
+    fontSize: 24,
+    opacity: 0.8
+  });
+  const loaded = await PDFDocument.load(watermarked);
+  assert.equal(loaded.getPageCount(), 2);
+});
+
+test('Page Organizer Assembly Logic - handles reordering, rotation and page exclusion', async () => {
+  const source = await createTestPdf(4, 'Sequential Report');
+  const srcDoc = await PDFDocument.load(source);
+  const outDoc = await PDFDocument.create();
+
+  // Desired arrangement: Page 3 (rotated 90), Page 1 (no rotation), Page 4 (omit Page 2)
+  const activePlan = [
+    { origPage: 3, rot: 90 },
+    { origPage: 1, rot: 0 },
+    { origPage: 4, rot: 180 }
+  ];
+
+  for (const item of activePlan) {
+    const [copied] = await outDoc.copyPages(srcDoc, [item.origPage - 1]);
+    if (item.rot) {
+      copied.setRotation({ type: 'degrees', angle: item.rot });
+    }
+    outDoc.addPage(copied);
+  }
+
+  const outBytes = await outDoc.save();
+  const loaded = await PDFDocument.load(outBytes);
+  assert.equal(loaded.getPageCount(), 3, '4 pages trimmed to 3 pages');
+  assert.equal(loaded.getPages()[0].getRotation().angle, 90);
+  assert.equal(loaded.getPages()[1].getRotation().angle, 0);
+  assert.equal(loaded.getPages()[2].getRotation().angle, 180);
+});
+

@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { Search, User, Layers, X, Clock } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Search, User, Layers, X, Clock, DownloadCloud, WifiOff } from 'lucide-react';
 import { APP_CONFIG } from '@pdf-toolbox/shared';
 import { ThemeToggle } from './ThemeToggle';
 
@@ -23,6 +23,40 @@ export const Header: React.FC<HeaderProps> = ({
   currentView
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isInstallable, setIsInstallable] = useState(false);
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+
+  useEffect(() => {
+    const handleBeforeInstall = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstall);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstall);
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setIsInstallable(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -86,6 +120,38 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Header Action Controls */}
         <div className="header-actions">
+          {isOffline && (
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.375rem',
+                padding: '0.25rem 0.625rem',
+                borderRadius: 'var(--radius-full)',
+                backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                color: 'var(--status-error)',
+                fontSize: '0.75rem',
+                fontWeight: 700
+              }}
+              title="You are working offline. All PDF operations run locally in your browser."
+            >
+              <WifiOff size={13} />
+              <span>Offline Active</span>
+            </div>
+          )}
+
+          {isInstallable && (
+            <button
+              className="btn-primary"
+              style={{ height: '36px', padding: '0 0.875rem', fontSize: '0.8125rem', gap: '0.375rem' }}
+              onClick={handleInstallClick}
+              title="Install PDF Toolbox to your desktop or device for instant offline access"
+            >
+              <DownloadCloud size={16} />
+              <span>Install App</span>
+            </button>
+          )}
+
           <button
             className={`btn-secondary ${currentView === 'tools' ? 'active' : ''}`}
             onClick={onNavigateTools}

@@ -151,3 +151,54 @@ export async function generateQrCodeDataUrl(content: string, margin = 2): Promis
     }
   });
 }
+
+export interface PdfPageThumbnailItem {
+  pageNumber: number;
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Renders high-fidelity thumbnails for every page of a PDF document
+ */
+export async function renderAllPdfPageThumbnails(
+  pdfBytes: Uint8Array,
+  scale = 0.35,
+  onProgress?: (progress: number, msg: string) => void
+): Promise<PdfPageThumbnailItem[]> {
+  try {
+    const loadingTask = pdfjsLib.getDocument({ data: pdfBytes });
+    const pdfDoc = await loadingTask.promise;
+    const numPages = pdfDoc.numPages;
+    const thumbnails: PdfPageThumbnailItem[] = [];
+
+    for (let i = 1; i <= numPages; i++) {
+      onProgress?.(Math.round((i / numPages) * 100), `Rendering preview for page ${i} of ${numPages}...`);
+      const page = await pdfDoc.getPage(i);
+      const viewport = page.getViewport({ scale });
+
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({
+          canvasContext: ctx,
+          viewport
+        }).promise;
+        thumbnails.push({
+          pageNumber: i,
+          dataUrl: canvas.toDataURL('image/jpeg', 0.8),
+          width: viewport.width,
+          height: viewport.height
+        });
+      }
+    }
+    return thumbnails;
+  } catch (err) {
+    console.error('Failed to render all page thumbnails:', err);
+    return [];
+  }
+}
+
