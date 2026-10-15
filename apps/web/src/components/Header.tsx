@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, User, Layers, X, Clock, DownloadCloud, WifiOff } from 'lucide-react';
+import { Search, User, Layers, X, Clock, DownloadCloud, WifiOff, Globe } from 'lucide-react';
 import { APP_CONFIG } from '@pdf-toolbox/shared';
 import { ThemeToggle } from './ThemeToggle';
+import { useI18n } from '../utils/i18n';
 
 interface HeaderProps {
   searchQuery: string;
@@ -22,6 +23,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenAccount,
   currentView
 }) => {
+  const { language, setLanguage, t } = useI18n();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isInstallable, setIsInstallable] = useState(false);
@@ -98,7 +100,7 @@ export const Header: React.FC<HeaderProps> = ({
               ref={searchInputRef}
               type="text"
               className="global-search-input"
-              placeholder="Search all 30+ PDF tools... (Press '/' to focus)"
+              placeholder={t('nav.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
               aria-label="Search tools"
@@ -136,7 +138,7 @@ export const Header: React.FC<HeaderProps> = ({
               title="You are working offline. All PDF operations run locally in your browser."
             >
               <WifiOff size={13} />
-              <span>Offline Active</span>
+              <span>{t('nav.offlineActive')}</span>
             </div>
           )}
 
@@ -148,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({
               title="Install PDF Toolbox to your desktop or device for instant offline access"
             >
               <DownloadCloud size={16} />
-              <span>Install App</span>
+              <span>{t('nav.installApp')}</span>
             </button>
           )}
 
@@ -157,13 +159,34 @@ export const Header: React.FC<HeaderProps> = ({
             onClick={onNavigateTools}
             style={{ height: '36px', padding: '0 0.875rem' }}
           >
-            All Tools
+            {t('nav.allTools')}
+          </button>
+
+          {/* Language Switcher Toggle */}
+          <button
+            className="btn-secondary"
+            onClick={() => setLanguage(language === 'en' ? 'bn' : 'en')}
+            style={{
+              height: '36px',
+              padding: '0 0.75rem',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.375rem',
+              borderRadius: 'var(--radius-full)'
+            }}
+            title={language === 'en' ? 'বাংলা ভাষায় পরিবর্তন করুন' : 'Switch to English'}
+            aria-label="Change Language"
+          >
+            <Globe size={15} style={{ color: 'var(--accent-primary)' }} />
+            <span>{language === 'en' ? 'বাংলা' : 'English'}</span>
           </button>
 
           <button
             className="btn-icon"
             onClick={onNavigateHistory}
-            title="Recent Documents & Task History"
+            title={t('nav.recentHistory')}
             aria-label="Recent documents history"
           >
             <Clock size={19} />
@@ -174,7 +197,7 @@ export const Header: React.FC<HeaderProps> = ({
           <button
             className="btn-icon"
             onClick={onOpenAccount}
-            title="User Account & Cloud Sync"
+            title={t('nav.userAccount')}
             aria-label="User Account"
           >
             <User size={19} />

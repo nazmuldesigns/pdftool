@@ -7,6 +7,10 @@ export interface SignPdfOptions {
   pageNumber?: number; // 1-based, default: last page
   xPosition?: number;
   yPosition?: number;
+  stampWidth?: number;
+  stampHeight?: number;
+  includeDate?: boolean;
+  dateString?: string;
   onProgress?: (progress: number, message: string) => void;
 }
 
@@ -21,6 +25,10 @@ export async function signPdfDocument(
     pageNumber,
     xPosition,
     yPosition,
+    stampWidth,
+    stampHeight,
+    includeDate,
+    dateString,
     onProgress
   } = options;
 
@@ -45,12 +53,27 @@ export async function signPdfDocument(
       img = await pdfDoc.embedPng(signatureImageBytes);
     }
     const dims = img.scale(0.5);
+    const targetW = stampWidth || Math.min(dims.width, 160);
+    const targetH = stampHeight || Math.min(dims.height, 60);
+
     targetPage.drawImage(img, {
       x: stampX,
       y: stampY,
-      width: Math.min(dims.width, 160),
-      height: Math.min(dims.height, 60)
+      width: targetW,
+      height: targetH
     });
+
+    if (includeDate) {
+      const fontRegular = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      const textToDraw = `Date: ${dateString || new Date().toISOString().slice(0, 10)}`;
+      targetPage.drawText(textToDraw, {
+        x: stampX,
+        y: Math.max(8, stampY - 14),
+        size: 9,
+        font: fontRegular,
+        color: rgb(0.3, 0.3, 0.3)
+      });
+    }
   } else {
     // Stylized signature text stamp
     const fontItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);

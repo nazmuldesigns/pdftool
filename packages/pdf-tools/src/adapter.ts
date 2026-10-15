@@ -413,6 +413,12 @@ export async function executeTool(request: ToolExecutionRequest): Promise<ToolEx
         signatureImageBytes: options.signatureImageBytes,
         signatureImageMime: options.signatureImageMime || 'image/png',
         pageNumber: Number(options.pageNumber) || undefined,
+        xPosition: options.xPosition !== undefined ? Number(options.xPosition) : undefined,
+        yPosition: options.yPosition !== undefined ? Number(options.yPosition) : undefined,
+        stampWidth: options.stampWidth !== undefined ? Number(options.stampWidth) : undefined,
+        stampHeight: options.stampHeight !== undefined ? Number(options.stampHeight) : undefined,
+        includeDate: Boolean(options.includeDate),
+        dateString: options.dateString,
         onProgress
       });
       return {

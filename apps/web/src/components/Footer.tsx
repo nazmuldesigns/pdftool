@@ -1,6 +1,7 @@
 import React from 'react';
 import { APP_CONFIG } from '@pdf-toolbox/shared';
 import { Layers, ShieldCheck, Mail, User } from 'lucide-react';
+import { useI18n } from '../utils/i18n';
 
 interface FooterProps {
   onNavigateCategory: (cat: string) => void;
@@ -15,6 +16,8 @@ export const Footer: React.FC<FooterProps> = ({
   onOpenTerms,
   onOpenFaq
 }) => {
+  const { t } = useI18n();
+
   return (
     <footer className="app-footer">
       <div className="container">
@@ -28,11 +31,11 @@ export const Footer: React.FC<FooterProps> = ({
               <span>{APP_CONFIG.name}</span>
             </div>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem', lineHeight: 1.5, marginBottom: '1rem' }}>
-              {APP_CONFIG.tagline}. High-speed, private document processing directly in your browser with zero data leaks.
+              {t('footer.privacyDesc')}
             </p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: 'var(--status-success)', fontSize: '0.8125rem', fontWeight: 600 }}>
               <ShieldCheck size={16} />
-              <span>Zero Document Retention by Default</span>
+              <span>{t('footer.privacyFirst')}</span>
             </div>
           </div>
 
@@ -86,13 +89,13 @@ export const Footer: React.FC<FooterProps> = ({
           fontSize: '0.875rem'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'center' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Lead Developer:</span>
+            <span style={{ color: 'var(--text-muted)' }}>{t('footer.engineeredBy')}:</span>
             <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'inline-flex', alignItems: 'center', gap: '0.375rem' }}>
               <User size={15} style={{ color: 'var(--accent-primary)' }} />
               {APP_CONFIG.developer}
             </span>
             <span style={{ color: 'var(--text-muted)' }}>•</span>
-            <span style={{ color: 'var(--text-muted)' }}>Direct Contact:</span>
+            <span style={{ color: 'var(--text-muted)' }}>{t('footer.directContact')}</span>
             <a
               href={`mailto:${APP_CONFIG.contactEmail}`}
               style={{
@@ -112,12 +115,12 @@ export const Footer: React.FC<FooterProps> = ({
 
         <div className="footer-bottom" style={{ marginTop: '1.5rem' }}>
           <div>
-            © {new Date().getFullYear()} {APP_CONFIG.name}. Engineered by {APP_CONFIG.developer}. Private & Client-First.
+            © {new Date().getFullYear()} {APP_CONFIG.name}. {t('footer.engineeredBy')} {APP_CONFIG.developer}. {t('footer.rights')}
           </div>
           <div style={{ display: 'flex', gap: '1.25rem' }}>
-            <a href="#privacy" onClick={(e) => { e.preventDefault(); onOpenPrivacy(); }}>Privacy</a>
-            <a href="#terms" onClick={(e) => { e.preventDefault(); onOpenTerms(); }}>Terms</a>
-            <a href="#faq" onClick={(e) => { e.preventDefault(); onOpenFaq(); }}>FAQ</a>
+            <a href="#privacy" onClick={(e) => { e.preventDefault(); onOpenPrivacy(); }}>{t('footer.privacy')}</a>
+            <a href="#terms" onClick={(e) => { e.preventDefault(); onOpenTerms(); }}>{t('footer.terms')}</a>
+            <a href="#faq" onClick={(e) => { e.preventDefault(); onOpenFaq(); }}>{t('footer.faq')}</a>
           </div>
         </div>
       </div>

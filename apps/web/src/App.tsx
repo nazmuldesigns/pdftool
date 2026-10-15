@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import {
-  APP_CONFIG,
   TOOLS_REGISTRY,
   CATEGORIES,
   getToolsByCategory,
@@ -16,6 +15,7 @@ import { AccountModal } from './components/AccountModal';
 import { InfoModal } from './components/InfoModal';
 import type { InfoModalType } from './components/InfoModal';
 import { Footer } from './components/Footer';
+import { useI18n } from './utils/i18n';
 import {
   Layers,
   Sparkles,
@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 
 export const App: React.FC = () => {
+  const { t } = useI18n();
   const [currentView, setCurrentView] = useState<'home' | 'tools' | 'workspace'>('home');
   const [selectedTool, setSelectedTool] = useState<ToolDefinition | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -217,13 +218,13 @@ export const App: React.FC = () => {
               <section className="hero-section">
                 <div className="hero-pill">
                   <Sparkles size={14} />
-                  <span>Private, Client-First Document Architecture</span>
+                  <span>{t('hero.badge')}</span>
                 </div>
                 <h1 className="hero-title">
-                  Every tool you need to work with <span>PDFs</span> in one place.
+                  {t('hero.title')}
                 </h1>
                 <p className="hero-subtitle">
-                  {APP_CONFIG.tagline}. High-speed, private, zero document leakage. Merge, split, compress, watermark, rotate, and convert directly in your browser.
+                  {t('hero.subtitle')}
                 </p>
 
                 {/* Value prop badges */}
@@ -238,15 +239,15 @@ export const App: React.FC = () => {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                     <ShieldCheck size={18} style={{ color: 'var(--status-success)' }} />
-                    <span>100% Client-Side Processing</span>
+                    <span>{t('hero.clientSide')}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                     <Zap size={18} style={{ color: 'var(--accent-primary)' }} />
-                    <span>Instant Execution • No Waiting</span>
+                    <span>{t('hero.instant')}</span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
                     <CheckCircle size={18} style={{ color: 'var(--status-info)' }} />
-                    <span>No Limits • No Registration Needed</span>
+                    <span>{t('hero.noLimits')}</span>
                   </div>
                 </div>
               </section>
@@ -258,18 +259,19 @@ export const App: React.FC = () => {
                 className={`category-pill ${activeCategory === 'all' ? 'active' : ''}`}
                 onClick={() => setActiveCategory('all')}
               >
-                All Tools ({TOOLS_REGISTRY.length})
+                {t('category.all')} ({TOOLS_REGISTRY.length})
               </button>
               {(Object.keys(CATEGORIES) as ToolCategory[]).map(catKey => {
                 const count = getToolsByCategory(catKey).length;
                 if (count === 0) return null;
+                const translatedCategory = t(`category.${catKey}`) || CATEGORIES[catKey].name;
                 return (
                   <button
                     key={catKey}
                     className={`category-pill ${activeCategory === catKey ? 'active' : ''}`}
                     onClick={() => setActiveCategory(catKey)}
                   >
-                    {CATEGORIES[catKey].name} ({count})
+                    {translatedCategory} ({count})
                   </button>
                 );
               })}
@@ -282,7 +284,7 @@ export const App: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                     <Sparkles size={20} style={{ color: 'var(--accent-primary)' }} />
                     <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700 }}>
-                      Most Popular Tools
+                      {t('section.popular')}
                     </h2>
                   </div>
                 </div>
@@ -302,8 +304,8 @@ export const App: React.FC = () => {
                   <Layers size={20} style={{ color: 'var(--accent-primary)' }} />
                   <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.375rem', fontWeight: 700 }}>
                     {searchQuery ? `Search Results for "${searchQuery}" (${filteredTools.length})` :
-                     activeCategory !== 'all' ? `${CATEGORIES[activeCategory].name} (${filteredTools.length})` :
-                     'Complete Tools Directory'}
+                     activeCategory !== 'all' ? `${t(`category.${activeCategory}`) || CATEGORIES[activeCategory].name} (${filteredTools.length})` :
+                     t('section.allTools')}
                   </h2>
                 </div>
               </div>
@@ -319,13 +321,13 @@ export const App: React.FC = () => {
                 }}>
                   <FolderOpen size={48} style={{ margin: '0 auto 1rem', opacity: 0.5 }} />
                   <h3 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '0.375rem' }}>
-                    No matching tools found
+                    {t('section.noResults')}
                   </h3>
                   <p style={{ fontSize: '0.875rem', marginBottom: '1.5rem' }}>
                     Try searching for keywords like "merge", "compress", "watermark", or "convert".
                   </p>
                   <button className="btn-secondary" onClick={() => { setSearchQuery(''); setActiveCategory('all'); }}>
-                    Reset Filters
+                    {t('section.resetFilters')}
                   </button>
                 </div>
               ) : (

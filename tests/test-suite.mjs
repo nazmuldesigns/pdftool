@@ -230,6 +230,22 @@ test('PDF Sign Operation - places electronic signature on document', async () =>
   assert.equal(loaded.getPageCount(), 3);
 });
 
+test('PDF Sign Operation - supports custom coordinates, stamp dimensions, and date stamp', async () => {
+  const source = await createTestPdf(2, 'Multi-page NDA');
+  const signed = await signPdfDocument(source, {
+    signatureText: 'Md. Nazmul Hasan',
+    pageNumber: 2,
+    xPosition: 350,
+    yPosition: 80,
+    stampWidth: 180,
+    stampHeight: 65,
+    includeDate: true,
+    dateString: '2026-10-15'
+  });
+  const loaded = await PDFDocument.load(signed);
+  assert.equal(loaded.getPageCount(), 2);
+});
+
 test('PDF Change Page Size Operation - resizes pages to Letter/A4 dimensions', async () => {
   const source = await createTestPdf(2, 'A4 Doc');
   const resized = await changePdfPageSize(source, { pageSize: 'letter' });

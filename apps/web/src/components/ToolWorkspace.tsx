@@ -1,15 +1,17 @@
 import React, { useState, useRef, useEffect } from 'react';
 import type { ToolDefinition } from '@pdf-toolbox/shared';
-import { executeTool, addWatermark } from '@pdf-toolbox/pdf-tools';
+import { executeTool, addWatermark, signPdfDocument } from '@pdf-toolbox/pdf-tools';
 import type { ToolExecutionResponse, FileInputPayload } from '@pdf-toolbox/pdf-tools';
 import { IconRenderer } from './IconRenderer';
 import { FilePreviewGrid } from './FilePreviewGrid';
 import type { PreviewFileItem } from './FilePreviewGrid';
-import { SignaturePad } from './SignaturePad';
+import { InteractiveDocumentSigner } from './InteractiveDocumentSigner';
+import type { DocumentSignatureData } from './InteractiveDocumentSigner';
 import { VisualPageOrganizer } from './VisualPageOrganizer';
 import type { PageStateItem } from './VisualPageOrganizer';
 import { WatermarkLivePreview } from './WatermarkLivePreview';
 import type { WatermarkSettings } from './WatermarkLivePreview';
+import { useI18n } from '../utils/i18n';
 import {
   getPdfFirstPageThumbnail,
   convertPdfToImages,
@@ -68,6 +70,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   onRecordHistory,
   onNavigateToTool
 }) => {
+  const { t } = useI18n();
   const [files, setFiles] = useState<File[]>([]);
   const [previewFiles, setPreviewFiles] = useState<PreviewFileItem[]>([]);
   const [options, setOptions] = useState<Record<string, any>>(() => {
@@ -94,7 +97,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
   }, [result]);
 
   // Specialized Tool State
-  const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [docSignatureData, setDocSignatureData] = useState<DocumentSignatureData | null>(null);
   const [extractedText, setExtractedText] = useState<string>('');
   const [copiedText, setCopiedText] = useState(false);
   const [renderedPdfImages, setRenderedPdfImages] = useState<PdfPageImage[]>([]);
@@ -581,7 +584,61 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
       }
 
       // ==========================================
-      // Handler 6: Default Central PDF Tools
+      // Handler 6: Interactive Visual Sign PDF Tool
+      // ==========================================
+      else if (tool.id === 'sign-pdf' && primaryFile) {
+        if (!docSignatureData || !docSignatureData.signatureDataUrl) {
+          throw new Error('Please create your electronic signature and position it on the document before executing.');
+        }
+        setStatusMessage('Applying electronic signature to document page...');
+        setProgress(25);
+
+        const res = await fetch(docSignatureData.signatureDataUrl);
+        const sigBytes = new Uint8Array(await res.arrayBuffer());
+
+        const buf = await primaryFile.arrayBuffer();
+        const pdfDoc = await PDFDocument.load(new Uint8Array(buf), { ignoreEncryption: true });
+        const pages = pdfDoc.getPages();
+        const targetPageIdx = Math.min(Math.max(1, docSignatureData.pageNumber), pages.length) - 1;
+        const targetPage = pages[targetPageIdx];
+        const { width: pWidth, height: pHeight } = targetPage.getSize();
+
+        const stampW = docSignatureData.width || 160;
+        const stampH = docSignatureData.height || 60;
+        const rawX = (pWidth * docSignatureData.xPercent) / 100 - stampW / 2;
+        const rawY = pHeight - (pHeight * docSignatureData.yPercent) / 100 - stampH / 2;
+        const posX = Math.max(10, Math.min(pWidth - stampW - 10, Math.round(rawX)));
+        const posY = Math.max(10, Math.min(pHeight - stampH - 10, Math.round(rawY)));
+
+        setProgress(65);
+        const outBytes = await signPdfDocument(new Uint8Array(buf), {
+          signatureImageBytes: sigBytes,
+          signatureImageMime: 'image/png',
+          pageNumber: docSignatureData.pageNumber,
+          xPosition: posX,
+          yPosition: posY,
+          stampWidth: stampW,
+          stampHeight: stampH,
+          includeDate: docSignatureData.includeDate,
+          dateString: docSignatureData.dateString,
+          onProgress: (p, msg) => {
+            setProgress(p);
+            setStatusMessage(msg);
+          }
+        });
+
+        setResult({
+          success: true,
+          toolId: tool.id,
+          outputData: outBytes,
+          outputMimeType: 'application/pdf',
+          outputFilename: `${baseName}-signed.pdf`,
+          statusMessage: `Electronic signature successfully stamped on Page ${docSignatureData.pageNumber}.`
+        });
+      }
+
+      // ==========================================
+      // Handler 7: Default Central PDF Tools
       // ==========================================
       else {
         // Build file payloads with rotation metadata from thumbnail grid
@@ -610,8 +667,8 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
 
         // Add signature bytes if signing
         let execOptions = { ...options };
-        if (tool.id === 'sign-pdf' && signatureDataUrl) {
-          const res = await fetch(signatureDataUrl);
+        if (tool.id === 'sign-pdf' && docSignatureData?.signatureDataUrl) {
+          const res = await fetch(docSignatureData.signatureDataUrl);
           const sigBytes = new Uint8Array(await res.arrayBuffer());
           execOptions.signatureImageBytes = sigBytes;
           execOptions.signatureImageMime = 'image/png';
@@ -752,7 +809,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
           aria-label="Back to all tools"
         >
           <ArrowLeft size={16} />
-          <span>Back to Tools</span>
+          <span>{t('workspace.back')}</span>
         </button>
         <span style={{ color: 'var(--text-muted)' }}>/</span>
         <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>{tool.name}</span>
@@ -868,9 +925,27 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
             </div>
           )}
 
-          {/* Interactive Signature Pad for Sign PDF */}
-          {tool.id === 'sign-pdf' && !result && (
-            <SignaturePad onSignatureChange={(dataUrl) => setSignatureDataUrl(dataUrl)} />
+          {/* Interactive Visual Document Signer for Sign PDF */}
+          {tool.id === 'sign-pdf' && files.length > 0 && !result && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  Document: <span style={{ color: 'var(--text-primary)' }}>{files[0].name}</span>
+                </div>
+                <button
+                  type="button"
+                  className="btn-secondary"
+                  style={{ height: '32px', fontSize: '0.75rem', padding: '0 0.75rem' }}
+                  onClick={() => { setFiles([]); setPreviewFiles([]); setDocSignatureData(null); }}
+                >
+                  Change Document
+                </button>
+              </div>
+              <InteractiveDocumentSigner
+                file={files[0]}
+                onChange={setDocSignatureData}
+              />
+            </div>
           )}
 
           {/* File Upload Dropzone (When no files are loaded) */}
@@ -891,7 +966,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 onChange={handleFileChange}
               />
               <UploadCloud className="dropzone-icon" />
-              <h2 className="dropzone-title">Choose files or drag & drop them here</h2>
+              <h2 className="dropzone-title">{t('workspace.dropzoneTitle')}</h2>
               <p className="dropzone-subtitle">
                 Supported: {tool.supportedInputs.join(', ')} (Max {tool.maxFileSizeMB} MB)
                 {tool.allowMultiple ? ' • Add up to 200 files with thumbnail reordering' : ''}
@@ -901,7 +976,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 className="btn-primary"
                 onClick={(e) => { e.stopPropagation(); fileInputRef.current?.click(); }}
               >
-                Select {tool.allowMultiple ? 'Files' : 'File'}
+                {tool.allowMultiple ? t('workspace.selectFiles') : t('workspace.selectFile')}
               </button>
             </div>
           )}
@@ -917,7 +992,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
           />
 
           {/* Interactive File Preview Grid (Supports 100+ files, Drag/Drop Reorder, Individual Rotations, Lightbox) */}
-          {previewFiles.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && (
+          {previewFiles.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && tool.id !== 'sign-pdf' && (
             <FilePreviewGrid
               files={previewFiles}
               onReorder={handleReorderFiles}
@@ -954,10 +1029,10 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
           )}
 
           {/* Tool Options Configuration Form */}
-          {tool.options.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && (
+          {tool.options.length > 0 && !result && !isPageOrganizerTool && tool.id !== 'add-watermark' && tool.id !== 'sign-pdf' && (
             <div className="options-panel">
               <h2 className="options-title">
-                <span>Configure Options</span>
+                <span>{t('workspace.configureOptions')}</span>
               </h2>
               <div className="options-grid">
                 {tool.options.map(opt => (
@@ -1104,7 +1179,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 style={{ height: '48px', padding: '0 2.25rem', fontSize: '1.0625rem', fontWeight: 700 }}
                 onClick={handleProcess}
               >
-                Execute {tool.name}
+                {t('workspace.execute')} {tool.name}
               </button>
             </div>
           )}
@@ -1115,7 +1190,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
               <div className="result-icon-success">
                 <CheckCircle2 size={32} />
               </div>
-              <h2 className="result-title">Processing Complete!</h2>
+              <h2 className="result-title">{t('workspace.complete')}</h2>
               <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
                 {result.statusMessage}
               </p>
@@ -1124,19 +1199,19 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 <div className="result-metrics">
                   {result.metadata.originalSize !== undefined && (
                     <div className="metric-item">
-                      <span className="metric-label">Original Size</span>
+                      <span className="metric-label">{t('workspace.originalSize')}</span>
                       <span className="metric-value">{formatSize(result.metadata.originalSize)}</span>
                     </div>
                   )}
                   {result.metadata.compressedSize !== undefined && (
                     <div className="metric-item">
-                      <span className="metric-label">Optimized Size</span>
+                      <span className="metric-label">{t('workspace.optimizedSize')}</span>
                       <span className="metric-value">{formatSize(result.metadata.compressedSize)}</span>
                     </div>
                   )}
                   {result.metadata.savedPercentage !== undefined && (
                     <div className="metric-item">
-                      <span className="metric-label">Saved</span>
+                      <span className="metric-label">{t('workspace.saved')}</span>
                       <span className="metric-value" style={{ color: 'var(--status-success)' }}>
                         {result.metadata.savedPercentage}%
                       </span>
@@ -1274,7 +1349,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
               <div className="download-filename-box">
                 <label htmlFor="rename-input" className="filename-label">
                   <Edit3 size={15} />
-                  <span>Save As:</span>
+                  <span>{t('workspace.saveAs')}</span>
                 </label>
                 <input
                   id="rename-input"
@@ -1296,8 +1371,8 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                   {tool.id === 'pdf-to-images' ? <Archive size={18} /> : <Download size={18} />}
                   <span>
                     {tool.id === 'pdf-to-images'
-                      ? `Download All Images (${renderedPdfImages.length} Pages as .ZIP)`
-                      : `Download ${customFilename || result.outputFilename || 'Document'}`}
+                      ? t('workspace.downloadAllZip')
+                      : `${t('workspace.download')} ${customFilename || result.outputFilename || 'Document'}`}
                   </span>
                 </button>
 
@@ -1308,7 +1383,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                   style={{ height: '46px' }}
                 >
                   <Bookmark size={18} />
-                  <span>{savedToCloud ? 'Saved to Documents' : 'Save to Cloud'}</span>
+                  <span>{savedToCloud ? t('workspace.savedToCloud') : t('workspace.saveToCloud')}</span>
                 </button>
 
                 <button
@@ -1317,7 +1392,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                   style={{ height: '46px' }}
                 >
                   <RotateCcw size={18} />
-                  <span>Process Another</span>
+                  <span>{t('workspace.processAnother')}</span>
                 </button>
               </div>
 
@@ -1326,7 +1401,7 @@ export const ToolWorkspace: React.FC<ToolWorkspaceProps> = ({
                 <div className="next-tool-pipeline">
                   <div className="next-tool-heading">
                     <Sparkles size={16} style={{ color: 'var(--accent-primary)' }} />
-                    <span>Continue with this PDF in another tool:</span>
+                    <span>{t('workspace.continueWith')}</span>
                   </div>
                   <div className="next-tool-actions">
                     {CHAINABLE_TOOLS.filter(t => t.id !== tool.id).map(t => (
